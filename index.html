@@ -1,0 +1,1433 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronia — forest kingdom</title>
+<meta name="description" content="A live profile card set in an interactive pixel forest kingdom.">
+<meta name="theme-color" content="#1d3b2f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky-1:#8fd3e8;
+    --sky-2:#d9f2d0;
+    --hill:#74c69d;
+    --hill-2:#52b788;
+    --tree-far:#2d6a4f;
+    --tree-near:#1b4332;
+    --trunk:#6b4226;
+    --ground:#40916c;
+    --grass:#2d6a4f;
+    --grass-deep:#1b4332;
+    --gold:#ffd166;
+    --amber:#f4a261;
+    --cream:#fff8e7;
+    --muted:#d8efcf;
+    --wood:#8b5a2b;
+    --wood-dark:#4a2e18;
+    --panel:#1d3b2f;
+    --panel-2:#27503d;
+    --ink:var(--cream);
+    --ink-2:var(--muted);
+    --ink-3:#a9d3bd;
+    --firefly:#fff3a0;
+    --font-pixel:"Press Start 2P","Courier New",monospace;
+    --font-body:"Pixelify Sans","Courier New",monospace;
+    --px:0;
+    --py:0;
+  }
+
+  /* ---------- scene palettes ---------- */
+  body[data-scene="day"]{
+    --sky-1:#8fd3e8;
+    --sky-2:#d9f2d0;
+    --hill:#74c69d;
+    --hill-2:#52b788;
+    --tree-far:#2d6a4f;
+    --tree-near:#1b4332;
+    --ground:#40916c;
+    --grass:#2d6a4f;
+    --grass-deep:#1b4332;
+    --panel:#1d3b2f;
+    --panel-2:#27503d;
+    --ink-3:#a9d3bd;
+    --firefly:#fff3a0;
+  }
+
+  body[data-scene="morning"]{
+    --sky-1:#f9a03f;
+    --sky-2:#ffe0a3;
+    --hill:#8fae6b;
+    --hill-2:#6f9a5a;
+    --tree-far:#3f6b45;
+    --tree-near:#21402c;
+    --ground:#5e8a4f;
+    --grass:#3f6b45;
+    --grass-deep:#21402c;
+    --panel:#2b3a26;
+    --panel-2:#3a4d31;
+    --ink-3:#ffe0ac;
+    --firefly:#fff2ae;
+  }
+
+  body[data-scene="night"]{
+    --sky-1:#0d1b2a;
+    --sky-2:#1b3a4b;
+    --hill:#1d3a4a;
+    --hill-2:#173443;
+    --tree-far:#123528;
+    --tree-near:#0a1f18;
+    --ground:#123a2a;
+    --grass:#123528;
+    --grass-deep:#0a1f18;
+    --panel:#122d24;
+    --panel-2:#17382d;
+    --ink-3:#8fb7a5;
+    --firefly:#fff9b0;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{min-height:100%}
+
+  /* Viewport boundary: decorative scenery and edge tooltips cannot widen the document. */
+  html{overflow-x:clip}
+  body{
+    margin:0;
+    min-height:100vh;
+    display:grid;
+    place-items:center;
+    padding:32px 20px;
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:15px;
+    background:var(--sky-1);
+    overflow-x:hidden;
+  }
+
+  /* ---------- the kingdom ---------- */
+  .world{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    overflow:hidden;
+    pointer-events:none;
+  }
+  .sky{position:absolute;inset:0}
+  .sky--day{background:linear-gradient(180deg,var(--sky-1) 0%,var(--sky-2) 72%)}
+  .sky--night{background:linear-gradient(180deg,#0d1b2a,#1b3a4b);opacity:0;transition:opacity .5s steps(5,end)}
+  body[data-scene="night"] .sky--night{opacity:1}
+
+  .starfield{
+    position:absolute;inset:0 0 46%;
+    opacity:0;
+    transition:opacity .5s steps(5,end);
+    background-image:
+      radial-gradient(2px 2px at 24px 34px,#fff8e7 99%,transparent),
+      radial-gradient(2px 2px at 138px 88px,#fff8e7 99%,transparent),
+      radial-gradient(3px 3px at 82px 142px,#ffd166 99%,transparent),
+      radial-gradient(2px 2px at 186px 24px,#fff8e7 99%,transparent);
+    background-size:220px 170px;
+  }
+  body[data-scene="night"] .starfield{opacity:.85}
+
+  .sun,.moon{
+    position:absolute;top:10%;left:79%;
+    width:60px;height:60px;
+    transition:opacity .45s steps(4,end),top .6s steps(6,end),background .3s steps(3,end);
+  }
+  .sun{background:var(--gold);box-shadow:0 0 0 8px rgba(255,209,102,.16),0 0 48px rgba(255,209,102,.55)}
+  .moon{background:#f2f6d9;box-shadow:0 0 0 8px rgba(242,246,217,.12),0 0 44px rgba(242,246,217,.45);opacity:0}
+
+  /* Morning sun rises low and warm above the orange sky. */
+  body[data-scene="morning"] .sun{
+    top:36%;
+    background:#ff9f45;
+    box-shadow:0 0 0 8px rgba(255,159,69,.18),0 0 52px rgba(255,159,69,.6);
+  }
+  body[data-scene="night"] .sun{opacity:0}
+  body[data-scene="night"] .moon{opacity:1}
+
+  /* One-shot clock flip: stepped sun/moon arc plus a stepped sky crossfade. */
+  body.scene-changing .sky--night,
+  body.scene-changing .starfield{transition:opacity .6s steps(6,end)}
+  body.scene-changing .sun,
+  body.scene-changing .moon{animation:sceneArc .6s steps(6,end) 1}
+
+  .layer{position:absolute;pointer-events:none;transition:transform .3s steps(5,end)}
+  /* Hill bodies reach the viewport floor; only the jagged tops are clipped, so parallax
+     can never expose sky beneath them. The taller boxes keep the crest line in place. */
+  .layer--hills{
+    left:-6%;right:-6%;bottom:0;height:53%;
+    background:var(--hill);
+    clip-path:polygon(0 100%,0 66%,8% 48%,15% 62%,23% 32%,31% 58%,39% 42%,47% 68%,56% 26%,64% 56%,73% 38%,81% 62%,89% 44%,96% 64%,100% 52%,100% 100%);
+    transform:translate3d(calc(var(--px) * 6px),calc(var(--py) * 3px),0);
+  }
+  .layer--hills-2{
+    left:-6%;right:-6%;bottom:0;height:42%;
+    background:var(--hill-2);
+    clip-path:polygon(0 100%,0 58%,10% 38%,19% 60%,28% 30%,37% 62%,47% 40%,56% 64%,66% 34%,75% 60%,85% 40%,94% 62%,100% 48%,100% 100%);
+    transform:translate3d(calc(var(--px) * 10px),calc(var(--py) * 5px),0);
+  }
+  /* Grass lives inside the ground layer to inherit its parallax, but the jagged
+     terrain shape is clipped on the ground's ::before so blades are never cut
+     off. Each --b is matched to the terrain vertex at that x, minus a small
+     embed so tufts look planted. Two depth layers, each on its own sway clock. */
+  .grass{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .blade{
+    position:absolute;
+    left:calc(var(--x) * 1%);
+    bottom:var(--b,78%);
+    width:var(--w,20px);height:var(--h,24px);
+    background:var(--grass);
+    clip-path:polygon(0 100%,0 56%,18% 22%,30% 62%,50% 0,70% 60%,82% 24%,100% 54%,100% 100%);
+    transform-origin:50% 100%;
+    animation:grassSway 3s steps(4,end) infinite alternate;
+    animation-delay:calc(var(--d,0) * -.37s);
+  }
+  .blade--deep{background:var(--grass-deep);height:calc(var(--h,24px) * 1.3);opacity:.78}
+  /* Very short screens fill the viewport with the card; top-align it so the
+     lower scene still has room to breathe. */
+  @media (max-width:699px) and (max-height:700px){
+    body{align-items:start}
+  }
+
+  .tree{position:absolute;bottom:9%;left:calc(var(--x) * 1%);width:var(--w);height:var(--h)}
+  .tree::before{
+    content:"";position:absolute;inset:0 0 14%;
+    background:var(--tree-far);
+    clip-path:polygon(50% 0,62% 22%,56% 22%,71% 45%,63% 45%,81% 72%,70% 72%,94% 100%,6% 100%,30% 72%,19% 72%,37% 45%,29% 45%,44% 22%,38% 22%);
+    z-index:1;
+  }
+  .tree::after{content:"";position:absolute;left:46%;bottom:0;width:8%;height:18%;background:var(--trunk);z-index:-1}
+  .tree--far{opacity:.9;transform:translate3d(calc(var(--px) * 18px),calc(var(--py) * 7px),0)}
+  .tree--near{z-index:1;transform:translate3d(calc(var(--px) * 27px),calc(var(--py) * 11px),0)}
+  .tree--near::before{background:var(--tree-near)}
+  .tree--near::after{background:var(--wood-dark)}
+
+  .layer--ground{
+    left:-12%;right:-12%;bottom:-6%;height:24%;
+    transform:translate3d(calc(var(--px) * 34px),calc(var(--py) * 12px),0);
+  }
+  /* Terrain shape lives on ::before, not the layer itself: a clip-path on the
+     layer would also clip the nested grass blades that rise above the crest. */
+  .layer--ground::before{
+    content:"";position:absolute;inset:0;
+    background:var(--ground);
+    clip-path:polygon(0 22%,4% 12%,9% 22%,14% 10%,20% 22%,26% 13%,32% 23%,38% 11%,45% 22%,52% 12%,59% 23%,66% 10%,73% 22%,80% 13%,87% 23%,94% 11%,100% 22%,100% 100%,0 100%);
+  }
+  .bloom{position:absolute;bottom:12%;width:6px;height:6px;z-index:1;box-shadow:0 0 0 2px rgba(0,0,0,.12)}
+  .bloom--pink{background:#ff77a8}
+  .bloom--gold{background:var(--gold)}
+  .bloom--cream{background:var(--cream)}
+
+  .fireflies{
+    position:absolute;inset:0;pointer-events:none;z-index:2;
+    opacity:1;visibility:visible;
+    transition:opacity .45s steps(5,end),visibility 0s;
+  }
+  /* Daylight hides the whole layer: stepped fade out, then it leaves the hit-test tree. */
+  body[data-scene="day"] .fireflies{
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transition:opacity .45s steps(5,end),visibility 0s .45s;
+  }
+  body[data-scene="day"] .firefly{pointer-events:none}
+  .firefly{
+    position:absolute;
+    left:calc(var(--x) * 1%);
+    top:calc(var(--y) * 1%);
+    width:8px;height:8px;
+    padding:0;border:0;
+    background:var(--firefly);
+    box-shadow:0 0 0 3px rgba(255,243,160,.16),0 0 18px 5px rgba(255,243,160,.6);
+    cursor:pointer;
+    pointer-events:auto;
+    animation:flyDrift 3.4s steps(4,end) infinite alternate,flyBlink 1.5s steps(2,end) infinite;
+    animation-delay:calc(var(--d) * -.37s);
+    transition:left 1.7s steps(8,end),top 1.7s steps(8,end),opacity .2s;
+  }
+  .firefly::after{content:"";position:absolute;inset:-9px}
+  .firefly.caught,.firefly:disabled{animation-name:flyDrift;opacity:0}
+  .firefly:focus-visible{outline:2px solid var(--cream);outline-offset:4px}
+
+  .hero-layer{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
+  .sparks{position:fixed;inset:0;z-index:6;pointer-events:none}
+  .spark{
+    position:absolute;width:5px;height:5px;
+    background:var(--firefly);
+    box-shadow:0 0 10px var(--firefly);
+    animation:sparkOut .6s steps(6,end) forwards;
+  }
+
+  .hero{
+    position:absolute;
+    bottom:8%;left:50%;
+    width:64px;height:64px;
+    background:url("hero.png") 0 0/192px 64px no-repeat;
+    image-rendering:pixelated;
+    transform:translateX(-50%);
+    /* `translate` is independent of `transform`, so the facing flip is preserved. */
+    translate:0 0;
+    animation:heroIdle 2.6s steps(4,end) infinite;
+    transition:left .28s steps(6,end),bottom .28s steps(6,end);
+    pointer-events:none;
+    z-index:3;
+  }
+  .hero.facing-left{transform:translateX(-50%) scaleX(-1)}
+  .hero.walking{animation:heroWalk .48s steps(3,end) infinite}
+  .hero::after{content:"";position:absolute;left:14%;bottom:-5px;width:72%;height:6px;background:rgba(0,0,0,.22)}
+  /* Dust sits at local `left` only. The facing flip mirrors the whole hero,
+     so it trails behind automatically; a `facing-left` override double-flips
+     it and pins the trail to one side. */
+  .hero::before{
+    content:"";position:absolute;left:-14px;bottom:6px;
+    width:6px;height:6px;
+    background:var(--muted);
+    box-shadow:7px 5px 0 -2px var(--muted),14px 1px 0 -3px var(--muted);
+    opacity:0;
+  }
+  .hero.walking::before{animation:dustTrail .42s steps(3,end) infinite}
+  .hero-bubble{
+    position:absolute;
+    left:50%;bottom:calc(8% + 74px);
+    transform:translateX(-50%) translateY(6px);
+    padding:6px 9px;
+    background:var(--cream);
+    color:var(--wood-dark);
+    border:3px solid var(--wood-dark);
+    box-shadow:4px 4px 0 rgba(0,0,0,.4);
+    font-family:var(--font-pixel);
+    font-size:10px;
+    line-height:1.4;
+    white-space:nowrap;
+    opacity:0;
+    transition:opacity .18s steps(3,end),transform .18s steps(3,end),left .28s steps(6,end),bottom .28s steps(6,end);
+  }
+  .hero-bubble[data-show="true"]{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hero-bubble::after{
+    content:"";position:absolute;left:50%;bottom:-12px;
+    width:0;height:0;transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:var(--wood-dark);
+  }
+
+  /* ---------- pixel campfire ---------- */
+  .campfire-layer{position:fixed;inset:0;z-index:1;pointer-events:none}
+  .campfire{
+    position:absolute;
+    left:28%;bottom:6%;
+    width:58px;height:48px;
+    padding:0;border:0;border-radius:0;
+    background:none;box-shadow:none;
+    color:inherit;
+    pointer-events:auto;
+    image-rendering:pixelated;
+    cursor:pointer;
+  }
+  .campfire:hover:not(:disabled){filter:none}
+  .campfire:active:not(:disabled){transform:none;box-shadow:none}
+  .campfire:focus-visible{outline:3px solid var(--cream);outline-offset:4px}
+  .campfire__glow{
+    position:absolute;left:50%;bottom:-6px;
+    width:92px;height:46px;
+    transform:translateX(-50%);
+    background:radial-gradient(ellipse at 50% 100%,rgba(255,166,58,.5),rgba(255,209,102,0) 70%);
+    opacity:0;
+    transition:opacity .25s steps(4,end);
+  }
+  .campfire__logs i{
+    position:absolute;
+    left:8px;bottom:4px;width:42px;height:9px;
+    background:var(--wood);
+    box-shadow:inset 0 -3px 0 var(--wood-dark),0 2px 0 rgba(0,0,0,.35);
+  }
+  .campfire__logs i:nth-child(1){transform:rotate(16deg)}
+  .campfire__logs i:nth-child(2){transform:rotate(-16deg)}
+  .campfire__logs i:nth-child(3){left:15px;bottom:0;width:28px;height:8px;background:var(--wood-dark)}
+  .campfire__flame{
+    position:absolute;left:50%;bottom:11px;
+    width:20px;height:27px;
+    transform:translateX(-50%) scaleY(.18);
+    transform-origin:50% 100%;
+    opacity:0;
+    transition:opacity .2s steps(3,end),transform .2s steps(3,end);
+    clip-path:polygon(45% 0,60% 0,60% 18%,80% 18%,80% 46%,100% 46%,100% 100%,0 100%,0 46%,20% 46%,20% 18%,45% 18%);
+  }
+  .campfire__flame--back{width:28px;height:35px;bottom:9px;background:var(--amber)}
+  .campfire__flame--mid{background:var(--gold)}
+  .campfire__flame--core{width:10px;height:16px;bottom:13px;background:var(--cream)}
+  .campfire[data-lit="true"] .campfire__glow{opacity:1}
+  .campfire[data-lit="true"] .campfire__flame{
+    opacity:1;
+    transform:translateX(-50%) scaleY(1);
+    animation:flameFlicker .46s steps(3,end) infinite alternate;
+  }
+  .campfire[data-lit="true"] .campfire__flame--back{animation-delay:-.14s}
+  .campfire[data-lit="true"] .campfire__flame--core{animation-delay:-.28s}
+
+  body::after{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:5;
+    pointer-events:none;
+    background:repeating-linear-gradient(to bottom,transparent 0 3px,rgba(0,0,0,.16) 3px 4px);
+    opacity:.22;
+  }
+
+  /* ---------- quest board ---------- */
+  .shell{
+    position:relative;
+    z-index:1;
+    width:100%;
+    max-width:460px;
+    animation:rise .6s steps(6,end) both;
+  }
+
+  .wordmark{
+    display:block;
+    width:100%;
+    height:auto;
+    margin:0 auto 18px;
+    /* Smooth scaling: `pixelated` drops the 1px bottom frame border when the
+       597px asset is downscaled to 460px, making the wordmark look cut off. */
+    image-rendering:auto;
+    filter:
+      drop-shadow(2px 0 0 var(--wood-dark))
+      drop-shadow(-2px 0 0 var(--wood-dark))
+      drop-shadow(0 2px 0 var(--wood-dark))
+      drop-shadow(0 -2px 0 var(--wood-dark))
+      drop-shadow(7px 7px 0 rgba(0,0,0,.55));
+    animation:wordmarkIn .7s steps(5,end) .05s both;
+  }
+
+  .card{
+    position:relative;
+    border:4px solid var(--wood);
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    box-shadow:
+      0 0 0 4px var(--wood-dark),
+      9px 9px 0 rgba(0,0,0,.45),
+      0 0 34px rgba(255,209,102,.16);
+    transform:perspective(900px) rotateX(calc(var(--py) * -3deg)) rotateY(calc(var(--px) * 4deg));
+    transition:transform .2s steps(4,end);
+  }
+
+  .card__top{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    padding:10px 12px;
+    background:var(--wood);
+    border-bottom:4px solid var(--wood-dark);
+  }
+  .card__top::before{
+    content:"";
+    margin-right:auto;
+    width:36px;height:10px;
+    background:
+      linear-gradient(var(--red,#ff6b6b),var(--red,#ff6b6b)) 0 0/10px 10px no-repeat,
+      linear-gradient(var(--gold),var(--gold)) 13px 0/10px 10px no-repeat,
+      linear-gradient(#8ce99a,#8ce99a) 26px 0/10px 10px no-repeat;
+  }
+  /* Quiet timestamp parked in the corner of the scene. Fixed outside the
+     transformed card so it stays pinned to the viewport; 80% transparent. */
+  .updated{
+    position:fixed;
+    left:14px;bottom:10px;
+    z-index:3;
+    pointer-events:none;
+    color:var(--cream);
+    font-family:var(--font-body);
+    font-size:11px;
+    line-height:1;
+    white-space:nowrap;
+    opacity:.2;
+  }
+  .counter{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    color:var(--cream);
+    font-family:var(--font-pixel);
+    font-size:10px;
+    opacity:1;visibility:visible;
+    transition:opacity .45s steps(5,end),visibility 0s;
+  }
+  /* The counter tracks the firefly round, so it follows the same scene gate. */
+  body[data-scene="day"] .counter{
+    opacity:0;visibility:hidden;
+    transition:opacity .45s steps(5,end),visibility 0s .45s;
+  }
+  .counter::before{
+    content:"";
+    width:8px;height:8px;
+    background:var(--firefly);
+    box-shadow:0 0 9px var(--firefly);
+    transform:rotate(45deg);
+  }
+
+  button{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-family:var(--font-pixel);
+    font-size:10px;
+    text-transform:uppercase;
+    color:var(--wood-dark);
+    background:var(--gold);
+    border:2px solid var(--wood-dark);
+    border-radius:0;
+    padding:9px 10px;
+    cursor:pointer;
+    box-shadow:4px 4px 0 var(--wood-dark);
+    transition:transform .1s steps(2,end),box-shadow .1s steps(2,end),filter .1s;
+  }
+  button:hover:not(:disabled){filter:brightness(1.12)}
+  button:active:not(:disabled){transform:translate(4px,4px);box-shadow:0 0 0 var(--wood-dark)}
+  button:disabled{opacity:.65;cursor:default}
+  button:focus-visible{outline:3px solid var(--cream);outline-offset:3px}
+  .identity{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:24px 18px 18px;
+    animation:fadeIn .45s steps(4,end) .1s both;
+  }
+  .avatar-wrap{
+    position:relative;
+    flex:none;
+    transform:translate3d(calc(var(--px) * 5px),calc(var(--py) * 4px),0);
+    transition:transform .2s steps(4,end);
+  }
+  .avatar{
+    position:relative;
+    z-index:1;
+    width:84px;height:84px;
+    display:block;
+    object-fit:cover;
+    image-rendering:pixelated;
+    border:4px solid var(--gold);
+    box-shadow:0 0 0 3px var(--wood-dark),7px 7px 0 rgba(0,0,0,.5);
+    animation:bob 2.4s steps(4,end) infinite;
+  }
+  .status-ring{
+    position:absolute;
+    z-index:2;
+    right:-7px;bottom:-7px;
+    width:20px;height:20px;
+    border:3px solid var(--panel);
+    color:#5f574f;
+    background:currentColor;
+    box-shadow:0 0 0 3px currentColor;
+    animation:statusBlink 1.8s steps(2,end) infinite;
+  }
+  .status-ring[data-status="online"]{color:var(--green,#8ce99a)}
+  .status-ring[data-status="idle"]{color:var(--gold)}
+  .status-ring[data-status="dnd"]{color:#ff6b6b}
+  .status-ring[data-status="offline"]{color:#5f574f}
+
+  .names{min-width:0}
+  .names h1{
+    margin:0 0 10px;
+    font-family:var(--font-pixel);
+    font-size:17px;
+    line-height:1.6;
+    color:var(--gold);
+    text-shadow:3px 3px 0 var(--wood-dark),6px 6px 0 rgba(0,0,0,.3);
+    overflow-wrap:anywhere;
+  }
+  .handle{
+    margin:0;
+    font-family:var(--font-pixel);
+    font-size:10px;
+    line-height:1.7;
+    color:#9ee6c4;
+    overflow-wrap:anywhere;
+  }
+
+  .sr-only{
+    position:absolute;
+    width:1px;height:1px;
+    padding:0;margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+
+  .activity{
+    margin:0 18px 4px;
+    padding:13px 14px;
+    border:3px solid #8ce99a;
+    background:rgba(140,233,154,.09);
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.3),5px 5px 0 rgba(0,0,0,.4);
+  }
+  .activity__kind{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 8px;
+    color:#8ce99a;
+    font-family:var(--font-pixel);
+    font-size:10px;
+    line-height:1.6;
+  }
+  .activity__kind::before{
+    content:"";
+    width:8px;height:8px;
+    flex:none;
+    background:currentColor;
+    box-shadow:0 0 0 2px var(--panel);
+    animation:statusBlink 1.4s steps(2,end) infinite;
+  }
+  .activity__name{margin:0;font-size:16px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+  .activity__detail{margin:3px 0 0;color:var(--ink-2);font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+
+  .socials{
+    margin:18px 18px 22px;
+    padding-top:16px;
+    border-top:3px dashed rgba(255,248,231,.25);
+  }
+  .socials__title{
+    margin:0 0 12px;
+    color:var(--gold);
+    font-family:var(--font-pixel);
+    font-size:10px;
+    line-height:1.6;
+  }
+  .socials__list{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:5px;
+    margin:0;
+    padding:0;
+    list-style:none;
+  }
+  .socials__list li{opacity:0;animation:chipIn .4s steps(4,end) forwards;animation-delay:calc(.3s + var(--i) * 60ms)}
+  .socials__list a{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:7px 7px;
+    border:2px solid var(--wood-dark);
+    background:var(--panel-2);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    line-height:1.2;
+    text-decoration:none;
+    box-shadow:4px 4px 0 var(--wood-dark);
+    transition:transform .1s steps(2,end),box-shadow .1s steps(2,end),background .1s,color .1s;
+  }
+  .socials__list a::after{
+    content:attr(data-lore);
+    position:absolute;
+    bottom:calc(100% + 9px);
+    left:50%;
+    width:max-content;max-width:190px;
+    padding:7px 9px;
+    background:#0f241c;
+    border:2px solid var(--gold);
+    color:var(--cream);
+    font-family:var(--font-body);
+    font-size:12px;
+    font-weight:500;
+    line-height:1.3;
+    white-space:normal;
+    text-align:center;
+    opacity:0;
+    pointer-events:none;
+    transform:translate(-50%,4px);
+    transition:opacity .12s,transform .12s;
+  }
+  .socials__list a:hover::after,
+  .socials__list a:focus::after,
+  .socials__list a:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+  /* Edge chips' tooltips would otherwise reach past a 460px viewport. */
+  .socials__list li:first-child a::after{left:0;transform:translate(0,4px)}
+  .socials__list li:last-child a::after{left:auto;right:0;transform:translate(0,4px)}
+  .socials__list li:first-child a:hover::after,
+  .socials__list li:first-child a:focus::after,
+  .socials__list li:first-child a:focus-visible::after,
+  .socials__list li:last-child a:hover::after,
+  .socials__list li:last-child a:focus::after,
+  .socials__list li:last-child a:focus-visible::after{transform:translate(0,0)}
+  .socials__list a:hover{
+    background:var(--brand,var(--gold));
+    color:var(--wood-dark);
+    transform:translate(-2px,-2px);
+    box-shadow:6px 6px 0 #0f241c;
+  }
+  .socials__list a:focus-visible{outline:3px solid var(--cream);outline-offset:3px}
+  .socials__icon{
+    width:13px;height:13px;
+    flex:none;
+    fill:currentColor;
+    color:var(--brand,var(--ink));
+    filter:drop-shadow(2px 2px 0 rgba(0,0,0,.4));
+    animation:iconPulse 2.4s steps(2,end) infinite;
+    transition:transform .1s steps(2,end);
+  }
+  .socials__list li:nth-child(2) .socials__icon{animation-delay:-.48s}
+  .socials__list li:nth-child(3) .socials__icon{animation-delay:-.96s}
+  .socials__list li:nth-child(4) .socials__icon{animation-delay:-1.44s}
+  .socials__list li:nth-child(5) .socials__icon{animation-delay:-1.92s}
+  .socials__list a:hover .socials__icon{color:currentColor;transform:scale(1.15)}
+
+  .s-discord{--brand:#b3b9ff}
+  .s-spotify{--brand:#8ce99a}
+  .s-x{--brand:#fff8e7}
+  .s-roblox{--brand:#ffffff}
+  .s-steam{--brand:#a5d8ff}
+
+  .error{
+    margin:0 18px 4px;
+    padding:11px 13px;
+    border:3px solid #ff6b6b;
+    background:rgba(255,107,107,.13);
+    box-shadow:5px 5px 0 rgba(0,0,0,.4);
+    color:#ffc9c9;
+    font-size:14px;
+    line-height:1.45;
+  }
+  .foot{
+    margin-top:8px;
+    padding:0 4px;
+    color:var(--cream);
+    font-family:var(--font-pixel);
+    font-size:10px;
+    line-height:1.8;
+    text-align:center;
+    text-shadow:1px 1px 0 rgba(0,0,0,.5);
+    animation:fadeIn .5s steps(5,end) .6s both;
+  }
+  .foot::after{content:"█";margin-left:7px;color:#8ce99a;animation:statusBlink 1s steps(2,end) infinite}
+  [hidden]{display:none !important}
+
+  /* ---------- sprite sheet ---------- */
+  @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes chipIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes wordmarkIn{from{opacity:0}to{opacity:1}}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes statusBlink{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes iconPulse{0%,100%{opacity:1}50%{opacity:.6}}
+  @keyframes flyDrift{from{transform:translate(0,0)}to{transform:translate(12px,-14px)}}
+  @keyframes flyBlink{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes sparkOut{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:0}}
+  @keyframes heroWalk{from{background-position:0 0}to{background-position:-192px 0}}
+  @keyframes heroIdle{0%,100%{translate:0 0}50%{translate:0 -3px}}
+  @keyframes grassSway{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+  @keyframes dustTrail{
+    0%{opacity:.9;transform:translate(0,0)}
+    100%{opacity:0;transform:translate(-10px,-7px)}
+  }
+  @keyframes flameFlicker{
+    from{transform:translateX(-50%) scale(.94,.86)}
+    to{transform:translateX(-50%) scale(1.02,1.08)}
+  }
+  @keyframes sceneArc{
+    0%{transform:translate(0,0)}
+    50%{transform:translate(-20px,-30px)}
+    100%{transform:translate(-40px,0)}
+  }
+
+  /* If animations are throttled, settle everything into its final visible state. */
+  body.settled .shell,
+  body.settled .wordmark,
+  body.settled .identity,
+  body.settled .foot,
+  body.settled .socials__list li{opacity:1;animation:none}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important}
+    .socials__list li{opacity:1}
+  }
+
+  @media (max-width:520px){
+    .activity,.socials,.error{margin-left:14px;margin-right:14px}
+    .socials__list{gap:4px}
+    .socials__list a{padding:6px 6px;font-size:12px}
+  }
+
+  @media (max-width:420px){
+    body{padding:20px 12px}
+    .card__top{padding:9px 10px;gap:6px}
+    .identity{padding:18px 14px 16px;gap:12px}
+    .avatar{width:70px;height:70px}
+    .names h1{font-size:13px}
+    .handle{font-size:9px}
+    .foot{font-size:9px}
+    .hero{width:52px;height:52px;background-size:156px 52px}
+  }
+</style>
+</head>
+<body>
+  <div class="world" aria-hidden="true">
+    <div class="sky sky--day"></div>
+    <div class="sky sky--night"></div>
+    <div class="starfield"></div>
+    <div class="sun"></div>
+    <div class="moon"></div>
+    <div class="layer layer--hills"></div>
+    <div class="layer layer--hills-2"></div>
+    <div class="tree tree--far" style="--x:2;--w:58px;--h:96px"></div>
+    <div class="tree tree--far" style="--x:12;--w:44px;--h:74px"></div>
+    <div class="tree tree--far" style="--x:23;--w:66px;--h:110px"></div>
+    <div class="tree tree--far" style="--x:35;--w:40px;--h:70px"></div>
+    <div class="tree tree--far" style="--x:46;--w:56px;--h:94px"></div>
+    <div class="tree tree--far" style="--x:58;--w:48px;--h:80px"></div>
+    <div class="tree tree--far" style="--x:70;--w:62px;--h:104px"></div>
+    <div class="tree tree--far" style="--x:82;--w:44px;--h:76px"></div>
+    <div class="tree tree--far" style="--x:93;--w:54px;--h:92px"></div>
+    <div class="tree tree--near" style="--x:-3;--w:84px;--h:140px"></div>
+    <div class="tree tree--near" style="--x:29;--w:72px;--h:122px"></div>
+    <div class="tree tree--near" style="--x:66;--w:88px;--h:146px"></div>
+    <div class="tree tree--near" style="--x:96;--w:76px;--h:128px"></div>
+    <div class="layer layer--ground">
+      <div class="grass">
+        <i class="blade blade--deep" style="--x:1;--b:78%;--w:24px;--h:26px;--d:0"></i>
+        <i class="blade" style="--x:4;--b:86%;--w:18px;--h:20px;--d:2"></i>
+        <i class="blade blade--deep" style="--x:10;--b:78%;--w:28px;--h:30px;--d:4"></i>
+        <i class="blade" style="--x:15;--b:86%;--w:16px;--h:18px;--d:1"></i>
+        <i class="blade" style="--x:21;--b:77%;--w:22px;--h:24px;--d:5"></i>
+        <i class="blade blade--deep" style="--x:27;--b:83%;--w:26px;--h:28px;--d:3"></i>
+        <i class="blade" style="--x:33;--b:77%;--w:18px;--h:19px;--d:6"></i>
+        <i class="blade" style="--x:39;--b:85%;--w:20px;--h:22px;--d:1"></i>
+        <i class="blade blade--deep" style="--x:45;--b:76%;--w:30px;--h:32px;--d:4"></i>
+        <i class="blade" style="--x:52;--b:86%;--w:17px;--h:18px;--d:7"></i>
+        <i class="blade" style="--x:58;--b:76%;--w:22px;--h:25px;--d:2"></i>
+        <i class="blade blade--deep" style="--x:64;--b:84%;--w:27px;--h:29px;--d:5"></i>
+        <i class="blade" style="--x:71;--b:79%;--w:19px;--h:20px;--d:0"></i>
+        <i class="blade" style="--x:77;--b:81%;--w:21px;--h:23px;--d:6"></i>
+        <i class="blade blade--deep" style="--x:83;--b:80%;--w:25px;--h:27px;--d:3"></i>
+        <i class="blade" style="--x:89;--b:78%;--w:18px;--h:19px;--d:7"></i>
+        <i class="blade" style="--x:95;--b:85%;--w:20px;--h:22px;--d:1"></i>
+      </div>
+    </div>
+    <div class="bloom bloom--pink" style="left:18%"></div>
+    <div class="bloom bloom--gold" style="left:34%;bottom:15%"></div>
+    <div class="bloom bloom--cream" style="left:61%"></div>
+    <div class="bloom bloom--pink" style="left:78%;bottom:16%"></div>
+  </div>
+
+  <div class="campfire-layer">
+    <button class="campfire" id="campfire" type="button" aria-label="Light the campfire" aria-pressed="false" data-lit="false">
+      <span class="campfire__glow" aria-hidden="true"></span>
+      <span class="campfire__logs" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="campfire__flame campfire__flame--back" aria-hidden="true"></span>
+      <span class="campfire__flame campfire__flame--mid" aria-hidden="true"></span>
+      <span class="campfire__flame campfire__flame--core" aria-hidden="true"></span>
+    </button>
+  </div>
+
+  <div class="hero-layer" aria-hidden="true">
+    <div class="hero" id="hero"></div>
+    <div class="hero-bubble" id="heroBubble" data-show="false"></div>
+  </div>
+
+  <div class="fireflies" id="fireflies">
+    <button class="firefly" style="--x:11;--y:24;--d:0" type="button" aria-label="Catch firefly 1 of 6"></button>
+    <button class="firefly" style="--x:27;--y:41;--d:2" type="button" aria-label="Catch firefly 2 of 6"></button>
+    <button class="firefly" style="--x:44;--y:19;--d:4" type="button" aria-label="Catch firefly 3 of 6"></button>
+    <button class="firefly" style="--x:59;--y:52;--d:1" type="button" aria-label="Catch firefly 4 of 6"></button>
+    <button class="firefly" style="--x:74;--y:31;--d:5" type="button" aria-label="Catch firefly 5 of 6"></button>
+    <button class="firefly" style="--x:89;--y:46;--d:3" type="button" aria-label="Catch firefly 6 of 6"></button>
+  </div>
+  <span id="fireflyStatus" class="sr-only" aria-live="polite"></span>
+  <div class="sparks" id="sparks" aria-hidden="true"></div>
+
+  <main class="shell">
+    <img class="wordmark" src="name-wordmark.png" alt="" width="597" height="128">
+    <section class="card" aria-labelledby="name">
+      <div class="card__top">
+        <span class="counter"><span id="fireflyCount">0</span>/6</span>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+
+      <div class="identity">
+        <div class="avatar-wrap">
+          <img id="avatar" class="avatar" alt="" width="84" height="84">
+          <span id="statusRing" class="status-ring" data-status="offline" aria-hidden="true"></span>
+        </div>
+        <div class="names">
+          <h1 id="name">Loading…</h1>
+          <p id="handle" class="handle">—</p>
+        </div>
+      </div>
+
+      <span id="statusText" class="sr-only" aria-live="polite">Connecting to Lanyard…</span>
+
+      <div id="activity" class="activity" hidden>
+        <p id="activityKind" class="activity__kind"></p>
+        <p id="activityName" class="activity__name"></p>
+        <p id="activityDetail" class="activity__detail" hidden></p>
+      </div>
+
+      <section class="socials" aria-labelledby="socials-title">
+        <h2 id="socials-title" class="socials__title">Portals</h2>
+        <ul class="socials__list" role="list">
+          <li class="s-discord" style="--i:0"><a href="https://discord.com/users/987815885702041610" target="_blank" rel="noopener noreferrer" aria-label="Discord (opens in a new tab) — The Town Square: chat, quests and chaos" data-lore="The Town Square — chat, quests and chaos"><svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Discord</a></li>
+          <li class="s-spotify" style="--i:1"><a href="https://open.spotify.com/user/31mlgjgb7lw4vjyfwpmm6z2sgqde" target="_blank" rel="noopener noreferrer" aria-label="Spotify (opens in a new tab) — The Bard's Grove: where the tunes grow" data-lore="The Bard's Grove — where the tunes grow"><svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>Spotify</a></li>
+          <li class="s-x" style="--i:2"><a href="https://x.com/Chronia69" target="_blank" rel="noopener noreferrer" aria-label="X (opens in a new tab) — The Messenger's Path: short words, far and wide" data-lore="The Messenger's Path — short words, far and wide"><svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg>X</a></li>
+          <li class="s-roblox" style="--i:3"><a href="https://www.roblox.com/users/502463017" target="_blank" rel="noopener noreferrer" aria-label="Roblox (opens in a new tab) — The Blocklands: a kingdom built brick by brick" data-lore="The Blocklands — a kingdom built brick by brick"><svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18.926 23.998 0 18.892 5.075.002 24 5.108ZM15.348 10.09l-5.282-1.453-1.414 5.273 5.282 1.453z"/></svg>Roblox</a></li>
+          <li class="s-steam" style="--i:4"><a href="https://steamcommunity.com/profiles/76561199448716750/" target="_blank" rel="noopener noreferrer" aria-label="Steam (opens in a new tab) — The Armory: games, loot and long nights" data-lore="The Armory — games, loot and long nights"><svg class="socials__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>Steam</a></li>
+        </ul>
+      </section>
+
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+
+    <div class="foot" aria-hidden="true"></div>
+  </main>
+
+  <span id="updated" class="updated">ID 987815885702041610</span>
+
+<script>
+  const USER_ID = "987815885702041610";
+  const ENDPOINT = `https://api.lanyard.rest/v1/users/${USER_ID}`;
+
+  const el = {
+    avatar: document.getElementById("avatar"),
+    ring: document.getElementById("statusRing"),
+    name: document.getElementById("name"),
+    handle: document.getElementById("handle"),
+    status: document.getElementById("statusText"),
+    activity: document.getElementById("activity"),
+    activityKind: document.getElementById("activityKind"),
+    activityName: document.getElementById("activityName"),
+    activityDetail: document.getElementById("activityDetail"),
+    error: document.getElementById("error"),
+    refresh: document.getElementById("refresh"),
+    updated: document.getElementById("updated"),
+  };
+
+  const STATUS_LABELS = {
+    online: "Online",
+    idle: "Idle",
+    dnd: "Do not disturb",
+    offline: "Offline",
+  };
+
+  const ACTIVITY_KINDS = {
+    0: "Playing",
+    1: "Streaming",
+    2: "Listening to",
+    3: "Watching",
+    4: "Custom",
+    5: "Competing in",
+  };
+
+  const heroBubble = document.getElementById("heroBubble");
+  let heroX = 50;
+  let heroBottom = "8%";
+  let bubbleTimer = 0;
+  let greeted = false;
+
+  function placeBubble() {
+    if (!heroBubble) return;
+    heroBubble.style.left = heroX + "%";
+    heroBubble.style.bottom = `calc(${heroBottom} + 74px)`;
+  }
+
+  function say(text) {
+    if (!heroBubble || !text) return;
+    heroBubble.textContent = text;
+    heroBubble.dataset.show = "true";
+    placeBubble();
+    clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(() => { heroBubble.dataset.show = "false"; }, 2400);
+  }
+
+  function avatarUrl(user) {
+    const hash = user.avatar;
+    if (typeof hash === "string" && /^[a-f0-9]{32}$/i.test(hash)) {
+      return `https://cdn.discordapp.com/avatars/${USER_ID}/${hash}.png?size=256`;
+    }
+    const n = Number(user.discriminator);
+    const fallback = Number.isFinite(n) ? Math.abs(n) % 5 : 0;
+    return `https://cdn.discordapp.com/embed/avatars/${fallback}.png`;
+  }
+
+  /* Lanyard reports Spotify either in its legacy `spotify` field or as a plain
+     activity. Both are reduced to a track so the activity reads "Listening to"
+     followed by the song name instead of the app name. In the legacy shape,
+     `spotify.song` is a STRING (e.g. "Let Go"), not an object with `.title`. */
+  function spotifyTrack(data) {
+    if (data.listening_to_spotify && data.spotify) {
+      const s = data.spotify;
+      const song = typeof s.song === "string" ? { title: s.song } : (s.song || {});
+      const title = String(song.title || s.title || "").trim();
+      const artist = String(song.artist || s.artist || "").trim();
+      if (title || artist) return { title: title || "Unknown track", artist };
+    }
+    const activity = (data.activities || []).find(a => a && /spotify/i.test(a.name || ""));
+    if (!activity) return null;
+    const meta = activity.metadata || {};
+    const title = String(activity.details || meta.title || meta.name || "").trim();
+    const artist = String(activity.state || meta.artist || meta.artists || "").trim();
+    if (!title && !artist) return null;
+    return { title: title || "Unknown track", artist };
+  }
+
+  function currentActivity(data) {
+    const track = spotifyTrack(data);
+    if (track) {
+      return {
+        kind: "Listening to",
+        name: track.title,
+        detail: track.artist ? `by ${track.artist}` : "",
+      };
+    }
+
+    const a = data.activities?.[0];
+    if (!a) return null;
+
+    if (a.type === 4) {
+      return { kind: "Custom", name: a.state || a.details || "Custom status", detail: "" };
+    }
+
+    const detail = [a.details, a.state].filter(Boolean).join(" · ");
+    return {
+      kind: ACTIVITY_KINDS[a.type] || "Doing",
+      name: a.name || "Something",
+      detail,
+    };
+  }
+
+  let errorShowing = false;
+  let alertToken = 0;
+
+  function render(data) {
+    const user = data.discord_user || {};
+    const status = STATUS_LABELS[data.discord_status] ? data.discord_status : "offline";
+
+    el.avatar.src = avatarUrl(user);
+    el.avatar.alt = `${user.display_name || user.global_name || user.username || "Discord user"}'s avatar`;
+    el.name.textContent = user.display_name || user.global_name || user.username || "Unknown user";
+
+    const tag = user.discriminator && user.discriminator !== "0" ? `#${user.discriminator}` : "";
+    el.handle.textContent = `@${user.username || "unknown"}${tag}`;
+
+    el.ring.dataset.status = status;
+    const label = STATUS_LABELS[status];
+    if (el.status.textContent !== label) el.status.textContent = label;
+    if (!el.error.hidden) {
+      alertToken++;
+      el.error.hidden = true;
+      errorShowing = false;
+    }
+
+    const activity = currentActivity(data);
+    el.activity.hidden = !activity;
+    if (activity) {
+      el.activityKind.textContent = activity.kind;
+      el.activityName.textContent = activity.name;
+      el.activityDetail.textContent = activity.detail;
+      el.activityDetail.hidden = !activity.detail;
+    }
+
+    if (!greeted) {
+      greeted = true;
+      say("Hey, traveler!");
+    }
+
+    el.updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
+
+  function showError(message) {
+    el.name.textContent = "Presence unavailable";
+    el.handle.textContent = "";
+    el.avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
+    el.avatar.alt = "";
+    el.activity.hidden = true;
+    el.ring.dataset.status = "offline";
+    if (el.status.textContent !== "Unavailable") el.status.textContent = "Unavailable";
+    el.updated.textContent = "Connection failed";
+
+    const text = `Couldn't load presence: ${message}. Check your connection and try again.`;
+    if (!errorShowing) {
+      el.error.hidden = false;
+      const token = ++alertToken;
+      const write = () => {
+        if (token !== alertToken || el.error.hidden) return;
+        el.error.textContent = text;
+      };
+      requestAnimationFrame(write);
+      setTimeout(write, 50);
+    } else if (el.error.textContent !== text) {
+      alertToken++;
+      el.error.textContent = text;
+    }
+    errorShowing = true;
+  }
+
+  async function load({ silent = false } = {}) {
+    if (el.refresh.disabled) return;
+    el.refresh.disabled = true;
+    if (!silent && el.status.textContent !== "Connecting to Lanyard…") {
+      el.status.textContent = "Connecting to Lanyard…";
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const response = await fetch(ENDPOINT, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      if (!json.success || !json.data) throw new Error("profile not found");
+      render(json.data);
+    } catch (err) {
+      showError(err.name === "AbortError" ? "request timed out" : (err.message || "network error"));
+    } finally {
+      clearTimeout(timer);
+      el.refresh.disabled = false;
+    }
+  }
+
+  el.refresh.addEventListener("click", () => load());
+  load();
+  setInterval(() => {
+    if (document.visibilityState === "visible") load({ silent: true });
+  }, 10000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") load({ silent: true });
+  });
+
+  const root = document.documentElement;
+  const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+  let parallaxEnabled = finePointer && !motionQuery.matches;
+  let pending = null;
+
+  function resetParallax() {
+    root.style.setProperty("--px", "0");
+    root.style.setProperty("--py", "0");
+  }
+
+  function onMotionChange(event) {
+    parallaxEnabled = finePointer && !event.matches;
+    if (!parallaxEnabled) {
+      pending = null;
+      resetParallax();
+    }
+  }
+  if (motionQuery.addEventListener) motionQuery.addEventListener("change", onMotionChange);
+  else motionQuery.addListener(onMotionChange);
+
+  if (finePointer) {
+    let frameId = 0;
+    let fallbackId = 0;
+
+    function flush() {
+      if (!pending) return;
+      const { x, y } = pending;
+      pending = null;
+      root.style.setProperty("--px", x.toFixed(3));
+      root.style.setProperty("--py", y.toFixed(3));
+    }
+
+    window.addEventListener("pointermove", (event) => {
+      if (!parallaxEnabled) return;
+      pending = {
+        x: (event.clientX / window.innerWidth - 0.5) * 2,
+        y: (event.clientY / window.innerHeight - 0.5) * 2,
+      };
+      if (!frameId) frameId = requestAnimationFrame(() => { frameId = 0; flush(); });
+      if (!fallbackId) fallbackId = setTimeout(() => { fallbackId = 0; flush(); }, 32);
+    }, { passive: true });
+
+    document.addEventListener("pointerout", (event) => {
+      if (event.relatedTarget === null) {
+        pending = null;
+        resetParallax();
+      }
+    });
+  }
+
+  /* ---------- scene clock ---------- */
+  const SCENE_LABELS = {
+    morning: "Morning",
+    day: "Day",
+    night: "Night",
+  };
+  const SCENE_THEME = {
+    morning: "#f9a03f",
+    day: "#1d3b2f",
+    night: "#0d1b2a",
+  };
+
+  function SCENE_FOR_HOUR(hour) {
+    if (hour >= 5 && hour <= 7) return "morning";
+    if (hour >= 8 && hour <= 17) return "day";
+    return "night";
+  }
+
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+
+  function sceneReducedMotion() {
+    return motionQuery.matches || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  let sceneChangeTimer = 0;
+
+  function clearSceneChanging() {
+    document.body.classList.remove("scene-changing");
+    document.body.removeEventListener("animationend", onSceneAnimationEnd);
+    clearTimeout(sceneChangeTimer);
+    sceneChangeTimer = 0;
+  }
+
+  function onSceneAnimationEnd(event) {
+    if (event.animationName === "sceneArc") clearSceneChanging();
+  }
+
+  function setScene(scene, { animate = false } = {}) {
+    const body = document.body;
+    const next = SCENE_LABELS[scene] ? scene : "day";
+
+    body.dataset.scene = next;
+    syncFireflyAvailability(next);
+    if (themeMeta) themeMeta.setAttribute("content", SCENE_THEME[next]);
+
+    clearSceneChanging();
+    if (animate && !sceneReducedMotion()) {
+      void body.offsetWidth;
+      body.classList.add("scene-changing");
+      body.addEventListener("animationend", onSceneAnimationEnd);
+      sceneChangeTimer = setTimeout(clearSceneChanging, 800);
+    }
+    return next;
+  }
+
+  function syncSceneFromClock({ animate = true } = {}) {
+    const next = SCENE_FOR_HOUR(new Date().getHours());
+    const changed = document.body.dataset.scene !== next;
+    setScene(next, { animate: animate && changed });
+    return next;
+  }
+
+  window.SCENE_FOR_HOUR = SCENE_FOR_HOUR;
+  window.setScene = setScene;
+  window.syncSceneFromClock = syncSceneFromClock;
+
+  setScene(SCENE_FOR_HOUR(new Date().getHours()));
+  setInterval(() => syncSceneFromClock(), 60000);
+
+  /* ---------- kingdom interactions ---------- */
+  const fireflies = [...document.querySelectorAll(".firefly")];
+  const fireflyCount = document.getElementById("fireflyCount");
+  const fireflyStatus = document.getElementById("fireflyStatus");
+  const sparks = document.getElementById("sparks");
+  const hero = document.getElementById("hero");
+  const campfire = document.getElementById("campfire");
+
+  const caughtOnce = new Set();
+  const cardEl = document.querySelector(".card");
+  const respawnTimers = new Map();
+  let roundResetTimer = 0;
+
+  /* Daylight hides the layer, so disable the buttons to pull them out of the tab order.
+     Catching itself only uses aria-disabled, keeping focus on visible fireflies. */
+  function syncFireflyAvailability(scene) {
+    const active = (scene || document.body.dataset.scene) !== "day";
+    document.querySelectorAll(".firefly").forEach((fly) => { fly.disabled = !active; });
+  }
+
+  /* Keep fireflies in the open scenery around the card so every one is visible and catchable. */
+  function placeFirefly(fly) {
+    const r = cardEl.getBoundingClientRect();
+    const left = r.left + window.scrollX;
+    const right = r.right + window.scrollX;
+    const top = r.top + window.scrollY;
+    const bottom = r.bottom + window.scrollY;
+    const docW = Math.max(document.documentElement.scrollWidth, window.innerWidth);
+    const docH = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+    const gap = 28;
+    const zones = [];
+    if (top - gap - 8 > 16) zones.push({ x: 8, y: 8, w: docW - 16, h: top - gap - 8 });
+    if (docH - bottom - gap - 8 > 16) zones.push({ x: 8, y: bottom + gap, w: docW - 16, h: docH - bottom - gap - 8 });
+    if (left - gap - 8 > 16) zones.push({ x: 8, y: top, w: left - gap - 8, h: r.height });
+    if (docW - right - gap - 8 > 16) zones.push({ x: right + gap, y: top, w: docW - right - gap - 8, h: r.height });
+    const zone = zones.length
+      ? zones[Math.floor(Math.random() * zones.length)]
+      : { x: 8, y: 8, w: docW - 16, h: docH - 16 };
+    fly.style.left = (zone.x + Math.random() * zone.w).toFixed(0) + "px";
+    fly.style.top = (zone.y + Math.random() * zone.h).toFixed(0) + "px";
+  }
+
+  function burst(x, y) {
+    for (let i = 0; i < 6; i++) {
+      const spark = document.createElement("span");
+      spark.className = "spark";
+      spark.style.left = x + "px";
+      spark.style.top = y + "px";
+      const angle = (Math.PI * 2 * i) / 6;
+      spark.style.setProperty("--dx", Math.cos(angle) * 28 + "px");
+      spark.style.setProperty("--dy", Math.sin(angle) * 28 + "px");
+      sparks.appendChild(spark);
+      setTimeout(() => spark.remove(), 650);
+    }
+  }
+
+  /* One round = six distinct catches. Named so verification can call it directly. */
+  function resetFireflyRound() {
+    clearTimeout(roundResetTimer);
+    roundResetTimer = 0;
+    respawnTimers.forEach((timer) => clearTimeout(timer));
+    respawnTimers.clear();
+    caughtOnce.clear();
+    fireflyCount.textContent = "0";
+    fireflies.forEach((fly, index) => {
+      fly.classList.remove("caught");
+      fly.removeAttribute("aria-disabled");
+      fly.setAttribute("aria-label", `Catch firefly ${index + 1} of 6`);
+      placeFirefly(fly);
+    });
+  }
+  window.resetFireflyRound = resetFireflyRound;
+
+  fireflies.forEach((fly, index) => {
+    const baseLabel = `Catch firefly ${index + 1} of 6`;
+    placeFirefly(fly);
+    fly.addEventListener("click", () => {
+      if (fly.disabled || fly.getAttribute("aria-disabled") === "true") return;
+      const box = fly.getBoundingClientRect();
+      burst(box.left + box.width / 2, box.top + box.height / 2);
+      say(["Got one!", "Spark!", "Caught!"][index % 3]);
+      fly.setAttribute("aria-disabled", "true");
+      fly.setAttribute("aria-label", `Firefly ${index + 1} caught — respawning`);
+      fly.classList.add("caught");
+      clearTimeout(respawnTimers.get(index));
+      respawnTimers.set(index, setTimeout(() => {
+        respawnTimers.delete(index);
+        placeFirefly(fly);
+        fly.classList.remove("caught");
+        fly.removeAttribute("aria-disabled");
+        fly.setAttribute("aria-label", baseLabel);
+      }, 2400));
+
+      if (caughtOnce.has(index)) return;
+      caughtOnce.add(index);
+      const caught = caughtOnce.size;
+      fireflyCount.textContent = String(caught);
+      if (caught === 6) {
+        fireflyStatus.textContent = "All six fireflies caught!";
+        clearTimeout(roundResetTimer);
+        roundResetTimer = setTimeout(resetFireflyRound, 900);
+      } else {
+        fireflyStatus.textContent = `Firefly caught. ${caught} of 6.`;
+      }
+    });
+  });
+
+  let placeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(placeTimer);
+    placeTimer = setTimeout(() => {
+      fireflies.forEach((fly) => {
+        if (fly.getAttribute("aria-disabled") !== "true") placeFirefly(fly);
+      });
+    }, 120);
+  });
+
+  let walkTimer = 0;
+  let inputMode = "pointer";
+  let inputTimer = 0;
+
+  function moveHero(next) {
+    if (motionQuery.matches) return;
+    const target = Math.max(4, Math.min(96, next));
+    if (Math.abs(target - heroX) < 0.4) return;
+    hero.classList.toggle("facing-left", target < heroX);
+    heroX = target;
+    hero.style.left = target + "%";
+    placeBubble();
+    hero.classList.add("walking");
+    clearTimeout(walkTimer);
+    walkTimer = setTimeout(() => hero.classList.remove("walking"), 260);
+  }
+
+  if (finePointer) {
+    window.addEventListener("pointermove", (event) => {
+      if (inputMode === "keyboard") return;
+      moveHero((event.clientX / window.innerWidth) * 100);
+    }, { passive: true });
+  }
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target;
+    if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    inputMode = "keyboard";
+    clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => { inputMode = "pointer"; }, 1500);
+    moveHero(heroX + (event.key === "ArrowLeft" ? -7 : 7));
+    event.preventDefault();
+  });
+
+  /* Click-to-move: the hero walks to a scenery point and shifts within the ground strip. */
+  function moveHeroTo(xPercent, yPercent) {
+    if (motionQuery.matches) return;
+    const x = Number(xPercent);
+    const y = Number(yPercent);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    moveHero(x);
+    /* The visible ground band runs from roughly 3% to 16% up from the viewport floor. */
+    const bottom = 16 - (Math.max(0, Math.min(100, y)) / 100) * 13;
+    hero.style.bottom = bottom.toFixed(1) + "%";
+    heroBottom = hero.style.bottom;
+    placeBubble();
+  }
+  window.moveHeroTo = moveHeroTo;
+
+  document.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.defaultPrevented) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    /* Never swallow clicks meant for the card, portals, fireflies or controls. */
+    if (target.closest(".campfire, .fireflies, .firefly, .shell, a, button")) return;
+    moveHeroTo(
+      (event.clientX / window.innerWidth) * 100,
+      (event.clientY / window.innerHeight) * 100,
+    );
+  });
+
+  function lightCampfire() {
+    const rect = campfire.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    moveHeroTo((cx / window.innerWidth) * 100, (cy / window.innerHeight) * 100);
+    if (campfire.dataset.lit === "true") return;
+    campfire.dataset.lit = "true";
+    campfire.setAttribute("aria-pressed", "true");
+    campfire.setAttribute("aria-label", "Campfire lit — walk here");
+    burst(cx, cy - 14);
+    say("Toasty!");
+  }
+  window.lightCampfire = lightCampfire;
+
+  campfire.addEventListener("click", (event) => {
+    event.stopPropagation();
+    lightCampfire();
+  });
+  /* Native button activation covers real keypresses; this also handles synthetic key events. */
+  campfire.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") return;
+    event.preventDefault();
+    lightCampfire();
+  });
+
+  setTimeout(() => document.body.classList.add("settled"), 1500);
+</script>
+</body>
+</html>
