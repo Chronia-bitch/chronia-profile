@@ -1464,6 +1464,32 @@
   @keyframes hintPulse{50%{border-color:var(--ink-3)}}
   @media (prefers-reduced-motion:reduce){.audio-hint{animation:none}}
 
+  /* Hidden scene-switcher opened by typing "chronia". */
+  .debug-menu{
+    position:fixed;top:58px;left:12px;z-index:81;
+    width:132px;padding:10px;
+    background:var(--panel);color:var(--cream);
+    border:2px solid var(--gold);
+    box-shadow:0 0 0 3px var(--wood-dark),5px 5px 0 rgba(0,0,0,.35);
+    font-family:var(--font-body);
+  }
+  .debug-menu__title{
+    margin:0 0 8px;font-size:10px;letter-spacing:1px;
+    color:var(--gold);text-align:center;
+  }
+  .debug-menu button{
+    display:block;width:100%;margin:0 0 6px;padding:6px 4px;
+    border:0;border-radius:0;
+    background:var(--panel-2);color:var(--cream);
+    font:12px/1 var(--font-body);cursor:pointer;
+  }
+  .debug-menu button:hover,
+  .debug-menu button[data-active="true"]{background:var(--gold);color:var(--panel)}
+  .debug-menu button:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+  .debug-menu__note{
+    margin:2px 0 0;font-size:9px;color:var(--ink-3);text-align:center;
+  }
+
   /* This third log looked like a stray dark bar; hide it entirely. */
   .campfire__logs i:nth-child(3){background:transparent!important;box-shadow:none!important}
 
@@ -1514,10 +1540,18 @@
 </style>
 <button class="music-toggle" id="musicToggle" type="button" aria-label="Play music" aria-pressed="false" data-playing="false" title="Play music"><span aria-hidden="true">♪</span></button>
 <span class="audio-hint" id="audioHint" aria-hidden="true">click for ambience</span>
+<div class="debug-menu" id="debugMenu" role="dialog" aria-label="Scene preview menu" hidden>
+  <p class="debug-menu__title">TIME OF DAY</p>
+  <button type="button" data-scene="morning">Morning</button>
+  <button type="button" data-scene="day">Day</button>
+  <button type="button" data-scene="night">Night</button>
+  <p class="debug-menu__note">preview only</p>
+</div>
 <script>
 (function(){
   var btn=document.getElementById('musicToggle');
   var hint=document.getElementById('audioHint');
+  var debugMenu=document.getElementById('debugMenu');
   var world=document.querySelector('.world');
   var hero=document.getElementById('hero');
   var campfire=document.getElementById('campfire');
@@ -1787,6 +1821,53 @@
     else if(!lit && crackleTimer){ clearTimeout(crackleTimer); crackleTimer=null; }
   }
   new MutationObserver(updateFire).observe(campfire,{attributes:true,attributeFilter:['data-lit']});
+
+  /* Hidden scene preview: type "chronia" anywhere outside a text field. */
+  var typed='';
+  function markActiveScene(){
+    var current=document.body.dataset.scene;
+    debugMenu.querySelectorAll('button[data-scene]').forEach(function(b){
+      b.dataset.active=String(b.dataset.scene===current);
+    });
+  }
+  function openDebug(){
+    debugMenu.hidden=false;
+    markActiveScene();
+    var first=debugMenu.querySelector('button[data-scene]');
+    if(first) first.focus();
+  }
+  function closeDebug(){
+    debugMenu.hidden=true;
+    typed='';
+  }
+  document.addEventListener('keydown',function(ev){
+    if(ev.ctrlKey||ev.altKey||ev.metaKey) return;
+    var t=ev.target;
+    if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+    if(ev.key==='Escape'){
+      if(!debugMenu.hidden){ closeDebug(); ev.preventDefault(); }
+      typed='';
+      return;
+    }
+    if(/^[a-z]$/i.test(ev.key)){
+      typed=(typed+ev.key.toLowerCase()).slice(-7);
+      if(typed==='chronia'){
+        typed='';
+        if(debugMenu.hidden) openDebug(); else closeDebug();
+      }
+    } else {
+      typed='';
+    }
+  });
+  debugMenu.addEventListener('click',function(ev){
+    var b=ev.target.closest('button[data-scene]');
+    if(!b) return;
+    if(typeof window.setScene==='function') window.setScene(b.dataset.scene,{animate:true});
+    closeDebug();
+  });
+  document.addEventListener('pointerdown',function(ev){
+    if(!debugMenu.hidden && !debugMenu.contains(ev.target)) closeDebug();
+  });
 })();
 </script>
 
