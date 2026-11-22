@@ -957,6 +957,14 @@
     return `https://cdn.discordapp.com/embed/avatars/${fallback}.png`;
   }
 
+  /* Discord custom-status entries are activities too (name "Custom Status",
+     id "custom"), but they aren't something you're actually playing. */
+  function realActivities(data) {
+    return (data.activities || []).filter(a =>
+      a && !/custom/i.test(String(a.name || "")) && !/custom/i.test(String(a.id || ""))
+    );
+  }
+
   /* Lanyard reports Spotify either in its legacy `spotify` field or as a plain
      activity. Both are reduced to a track so the activity reads "Listening to"
      followed by the song name instead of the app name. In the legacy shape,
@@ -969,7 +977,7 @@
       const artist = String(song.artist || s.artist || "").trim();
       if (title || artist) return { title: title || "Unknown track", artist };
     }
-    const activity = (data.activities || []).find(a => a && /spotify/i.test(a.name || ""));
+    const activity = realActivities(data).find(a => /spotify/i.test(a.name || ""));
     if (!activity) return null;
     const meta = activity.metadata || {};
     const title = String(activity.details || meta.title || meta.name || "").trim();
@@ -988,7 +996,7 @@
       };
     }
 
-    const a = data.activities?.[0];
+    const a = realActivities(data)[0];
     if (!a) return null;
 
     if (a.type === 4) {
