@@ -1070,6 +1070,23 @@
     errorShowing = true;
   }
 
+  const REQUEST_TIMEOUT = 12000;
+  const RETRY_DELAY = 400;
+
+  async function fetchPresence() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    try {
+      const response = await fetch(ENDPOINT, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      if (!json.success || !json.data) throw new Error("profile not found");
+      return json.data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function load({ silent = false } = {}) {
     if (el.refresh.disabled) return;
     el.refresh.disabled = true;
@@ -1077,19 +1094,20 @@
       el.status.textContent = "Connecting to Lanyard…";
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-
     try {
-      const response = await fetch(ENDPOINT, { cache: "no-store", signal: controller.signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const json = await response.json();
-      if (!json.success || !json.data) throw new Error("profile not found");
-      render(json.data);
+      let data;
+      try {
+        data = await fetchPresence();
+      } catch (firstError) {
+        // A second attempt recovers from slow first connections and brief drops.
+        if (firstError.message === "profile not found") throw firstError;
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        data = await fetchPresence();
+      }
+      render(data);
     } catch (err) {
       showError(err.name === "AbortError" ? "request timed out" : (err.message || "network error"));
     } finally {
-      clearTimeout(timer);
       el.refresh.disabled = false;
     }
   }
