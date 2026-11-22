@@ -1450,6 +1450,20 @@
   .music-toggle:focus-visible{outline:3px solid var(--cream);outline-offset:8px}
   .music-toggle[data-playing="false"]{color:var(--ink-3)}
 
+  /* Small pixel nudge until the browser allows audio after a click. */
+  .audio-hint{
+    position:fixed;top:16px;left:64px;z-index:80;
+    padding:5px 8px;
+    background:var(--panel);color:var(--cream);
+    border:2px solid var(--gold);
+    font:11px/1.2 var(--font-body);
+    white-space:nowrap;pointer-events:none;
+    box-shadow:3px 3px 0 rgba(0,0,0,.35);
+    animation:hintPulse 1.4s steps(2,end) infinite;
+  }
+  @keyframes hintPulse{50%{border-color:var(--ink-3)}}
+  @media (prefers-reduced-motion:reduce){.audio-hint{animation:none}}
+
   /* This third log looked like a stray dark bar; hide it entirely. */
   .campfire__logs i:nth-child(3){background:transparent!important;box-shadow:none!important}
 
@@ -1499,9 +1513,11 @@
   }
 </style>
 <button class="music-toggle" id="musicToggle" type="button" aria-label="Play music" aria-pressed="false" data-playing="false" title="Play music"><span aria-hidden="true">♪</span></button>
+<span class="audio-hint" id="audioHint" aria-hidden="true">click for ambience</span>
 <script>
 (function(){
   var btn=document.getElementById('musicToggle');
+  var hint=document.getElementById('audioHint');
   var world=document.querySelector('.world');
   var hero=document.getElementById('hero');
   var campfire=document.getElementById('campfire');
@@ -1529,9 +1545,14 @@
   var bass=[48,48,43,45,48,43,41,43];
   function freq(n){return 440*Math.pow(2,(n-69)/12);}
 
+  function updateHint(){
+    if(!hint) return;
+    hint.hidden=!!ctx && ctx.state==='running';
+  }
   function ensureAudio(){
-    if(ctx) { if(ctx.state==='suspended') ctx.resume(); return; }
+    if(ctx) { if(ctx.state==='suspended') ctx.resume(); updateHint(); return; }
     ctx=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.addEventListener) ctx.addEventListener('statechange',updateHint);
     master=ctx.createGain(); master.gain.value=0.8; master.connect(ctx.destination);
     musicGain=ctx.createGain(); musicGain.gain.value=0; musicGain.connect(master);
     windGain=ctx.createGain(); windGain.gain.value=0; windGain.connect(master);
@@ -1568,6 +1589,7 @@
     var breatheAmt=ctx.createGain(); breatheAmt.gain.value=0.35;
     breathe.connect(breatheAmt); breatheAmt.connect(fireSwell.gain); breathe.start();
     fireSrc.start();
+    updateHint();
   }
 
   function tone(n,time,dur,type,vol){
@@ -1640,6 +1662,7 @@
     btn.title=on?'Mute music':'Play music';
     btn.firstElementChild.textContent=on?'♫':'♪';
     document.body.classList.toggle('wind-active',!on && !!ctx);
+    updateHint();
   }
   function startWind(){
     if(!ctx) return;
@@ -1766,5 +1789,6 @@
   new MutationObserver(updateFire).observe(campfire,{attributes:true,attributeFilter:['data-lit']});
 })();
 </script>
+
 </body>
 </html>
