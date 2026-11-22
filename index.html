@@ -1430,5 +1430,341 @@
 
   setTimeout(() => document.body.classList.add("settled"), 1500);
 </script>
+<style>
+  /* Pixel-art corner button: hard edges, stepped frame, no glass or rounding. */
+  .music-toggle{
+    position:fixed;top:12px;left:12px;z-index:80;
+    width:36px;height:36px;padding:0;
+    display:grid;place-items:center;
+    border:0;border-radius:0;
+    background:var(--panel);color:var(--gold);
+    font:20px/1 var(--font-body);cursor:pointer;
+    box-shadow:
+      0 0 0 3px var(--wood-dark),
+      0 0 0 6px var(--gold),
+      6px 6px 0 rgba(0,0,0,.35);
+    transition:background .1s steps(2,end),transform .1s steps(2,end);
+  }
+  .music-toggle:hover{background:var(--panel-2)}
+  .music-toggle:active{transform:translate(2px,2px)}
+  .music-toggle:focus-visible{outline:3px solid var(--cream);outline-offset:8px}
+  .music-toggle[data-playing="false"]{color:var(--ink-3)}
+
+  /* This third log looked like a stray dark bar; hide it entirely. */
+  .campfire__logs i:nth-child(3){background:transparent!important;box-shadow:none!important}
+
+  /* Empty footer only existed to host a blinking green cursor. */
+  .foot{display:none!important}
+
+  /* Stray colored dots in the grass. */
+  .bloom{display:none!important}
+
+  /* Chunky stepped clouds drifting across the sky. */
+  .pixel-cloud{
+    position:absolute;left:0;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23fff8e7' d='M16 2h12v6H16zm-8 6h28v6H8zM2 14h40v6H2z'/%3E%3C/svg%3E") center/contain no-repeat;
+    image-rendering:pixelated;
+    opacity:.55;
+    animation:cloudDrift linear infinite;
+    will-change:transform;
+  }
+  @keyframes cloudDrift{
+    from{transform:translateX(-140px)}
+    to{transform:translateX(calc(100vw + 140px))}
+  }
+  body[data-scene="morning"] .pixel-cloud{opacity:.45}
+  body[data-scene="night"] .pixel-cloud{opacity:.2}
+
+  /* Thin gusts that only show while the wind is the active sound. */
+  .wind-streak{
+    position:absolute;left:0;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(255,248,231,.6),transparent);
+    opacity:0;
+    animation:streakDrift linear infinite;
+    will-change:transform;
+  }
+  @keyframes streakDrift{
+    0%,8%{opacity:0;transform:translateX(-160px)}
+    22%,72%{opacity:.45}
+    88%,100%{opacity:0;transform:translateX(calc(100vw + 160px))}
+  }
+  body.wind-active .wind-streak{animation-play-state:running}
+  body:not(.wind-active) .wind-streak{animation:none}
+  body[data-scene="night"] .wind-streak{filter:opacity(.6)}
+
+  @media (prefers-reduced-motion:reduce){
+    .pixel-cloud{animation:none;left:20%}
+    .wind-streak{display:none}
+    .music-toggle{transition:none}
+  }
+</style>
+<button class="music-toggle" id="musicToggle" type="button" aria-label="Play music" aria-pressed="false" data-playing="false" title="Play music"><span aria-hidden="true">♪</span></button>
+<script>
+(function(){
+  var btn=document.getElementById('musicToggle');
+  var world=document.querySelector('.world');
+  var hero=document.getElementById('hero');
+  var campfire=document.getElementById('campfire');
+
+  [['8%',96,36,58,-8],['20%',132,50,76,-34],['31%',72,28,94,-62]].forEach(function(c){
+    var el=document.createElement('div');
+    el.className='pixel-cloud';
+    el.style.top=c[0]; el.style.width=c[1]+'px'; el.style.height=c[2]+'px';
+    el.style.animationDuration=c[3]+'s'; el.style.animationDelay=c[4]+'s';
+    world.insertBefore(el, world.querySelector('.sun'));
+  });
+  [['9%',120,3.4,-.4,0],['17%',76,4.6,-2.2,5],['25%',148,2.9,-1.1,9],['34%',92,3.8,-3.4,2],
+   ['43%',64,4.2,-.8,11],['53%',132,3.1,-2.7,6],['62%',88,4.9,-1.6,1],['72%',110,3.6,-3.9,8]].forEach(function(s){
+    var el=document.createElement('div');
+    el.className='wind-streak';
+    el.style.top=s[0]; el.style.left=s[4]+'%'; el.style.width=s[1]+'px';
+    el.style.animationDuration=s[2]+'s'; el.style.animationDelay=s[3]+'s';
+    world.appendChild(el);
+  });
+
+  var ctx=null, master=null, musicGain=null, windGain=null, delay=null, timer=null;
+  var playing=false, userMuted=false, step=0, nextTime=0, noiseBuf=null, windSrc=null, fireGain=null;
+  var bpm=92, stepDur=60/bpm/4;
+  var lead=[72,0,76,0,79,0,0,0, 76,0,74,0,72,0,0,0, 72,0,76,0,81,0,0,0, 79,0,76,0,74,0,72,0];
+  var bass=[48,48,43,45,48,43,41,43];
+  function freq(n){return 440*Math.pow(2,(n-69)/12);}
+
+  function ensureAudio(){
+    if(ctx) { if(ctx.state==='suspended') ctx.resume(); return; }
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain(); master.gain.value=0.8; master.connect(ctx.destination);
+    musicGain=ctx.createGain(); musicGain.gain.value=0; musicGain.connect(master);
+    windGain=ctx.createGain(); windGain.gain.value=0; windGain.connect(master);
+
+    delay=ctx.createDelay(0.6); delay.delayTime.value=0.24;
+    var fb=ctx.createGain(); fb.gain.value=0.22;
+    var wet=ctx.createGain(); wet.gain.value=0.2;
+    delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(musicGain);
+
+    noiseBuf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+    var d=noiseBuf.getChannelData(0);
+    for(var i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+
+    windSrc=ctx.createBufferSource(); windSrc.buffer=noiseBuf; windSrc.loop=true;
+    var hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=140;
+    var lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
+    var gust=ctx.createGain(); gust.gain.value=0.7;
+    windSrc.connect(hp); hp.connect(lp); lp.connect(gust); gust.connect(windGain);
+    var lfo=ctx.createOscillator(); lfo.frequency.value=0.06;
+    var lfoAmt=ctx.createGain(); lfoAmt.gain.value=0.3;
+    lfo.connect(lfoAmt); lfoAmt.connect(gust.gain); lfo.start();
+    windSrc.start();
+
+    /* Fire: a breathing band-passed whoosh with a slow sweep, not a low rumble. */
+    fireGain=ctx.createGain(); fireGain.gain.value=0; fireGain.connect(master);
+    var fireSrc=ctx.createBufferSource(); fireSrc.buffer=noiseBuf; fireSrc.loop=true;
+    var fireBp=ctx.createBiquadFilter(); fireBp.type='bandpass'; fireBp.frequency.value=480; fireBp.Q.value=1.2;
+    var fireSwell=ctx.createGain(); fireSwell.gain.value=0.6;
+    fireSrc.connect(fireBp); fireBp.connect(fireSwell); fireSwell.connect(fireGain);
+    var sweep=ctx.createOscillator(); sweep.frequency.value=0.13;
+    var sweepAmt=ctx.createGain(); sweepAmt.gain.value=260;
+    sweep.connect(sweepAmt); sweepAmt.connect(fireBp.frequency); sweep.start();
+    var breathe=ctx.createOscillator(); breathe.frequency.value=0.31;
+    var breatheAmt=ctx.createGain(); breatheAmt.gain.value=0.35;
+    breathe.connect(breatheAmt); breatheAmt.connect(fireSwell.gain); breathe.start();
+    fireSrc.start();
+  }
+
+  function tone(n,time,dur,type,vol){
+    var o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.value=freq(n);
+    g.gain.setValueAtTime(0.0001,time);
+    g.gain.exponentialRampToValueAtTime(vol,time+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+dur);
+    o.connect(g); g.connect(musicGain); g.connect(delay);
+    o.start(time); o.stop(time+dur+0.04);
+  }
+  function noiseHit(time,dur,filterType,filterFreq,vol,dest){
+    var s=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain();
+    s.buffer=noiseBuf; f.type=filterType; f.frequency.value=filterFreq;
+    g.gain.setValueAtTime(vol,time);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+dur);
+    s.connect(f); f.connect(g); g.connect(dest||master);
+    s.start(time); s.stop(time+dur+0.01);
+  }
+  function blip(freqHz){
+    if(!ctx || ctx.state!=='running') return;
+    var t=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='square'; o.frequency.value=freqHz;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.012,t+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.045);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.05);
+  }
+
+  function birdChirp(){
+    if(!ctx || ctx.state!=='running') return;
+    var t=ctx.currentTime;
+    for(var k=0;k<2;k++){
+      var st=t+k*0.13, o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine';
+      o.frequency.setValueAtTime(1500+k*120,st);
+      o.frequency.exponentialRampToValueAtTime(2300+k*160,st+0.06);
+      o.frequency.exponentialRampToValueAtTime(1700+k*100,st+0.11);
+      g.gain.setValueAtTime(0.0001,st);
+      g.gain.exponentialRampToValueAtTime(0.012,st+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,st+0.11);
+      o.connect(g); g.connect(master); o.start(st); o.stop(st+0.13);
+    }
+  }
+  function leafRustle(){
+    if(!ctx || ctx.state!=='running') return;
+    noiseHit(ctx.currentTime,0.22,'highpass',2400,0.006);
+  }
+  function natureLoop(){
+    if(ctx && ctx.state==='running'){
+      if(Math.random()<0.6) birdChirp(); else leafRustle();
+    }
+    setTimeout(natureLoop,3000+Math.random()*6000);
+  }
+  setTimeout(natureLoop,2500);
+
+  function schedule(){
+    while(nextTime < ctx.currentTime + 0.2){
+      var i=step%lead.length;
+      if(lead[i]) tone(lead[i],nextTime,stepDur*1.8,'square',0.05);
+      if(i%4===0) tone(bass[Math.floor(i/4)%bass.length],nextTime,stepDur*3.5,'triangle',0.1);
+      nextTime+=stepDur; step++;
+    }
+  }
+  function setUI(on){
+    playing=on;
+    btn.setAttribute('data-playing',on?'true':'false');
+    btn.setAttribute('aria-pressed',on?'true':'false');
+    btn.setAttribute('aria-label',on?'Mute music':'Play music');
+    btn.title=on?'Mute music':'Play music';
+    btn.firstElementChild.textContent=on?'♫':'♪';
+    document.body.classList.toggle('wind-active',!on && !!ctx);
+  }
+  function startWind(){
+    if(!ctx) return;
+    if(playing){ clearInterval(timer); timer=null; playing=false; }
+    musicGain.gain.cancelScheduledValues(ctx.currentTime);
+    musicGain.gain.setTargetAtTime(0,ctx.currentTime,0.12);
+    windGain.gain.cancelScheduledValues(ctx.currentTime);
+    windGain.gain.setTargetAtTime(0.035,ctx.currentTime,0.4);
+    setUI(false);
+  }
+  function startMusic(){
+    if(!ctx || playing) return;
+    musicGain.gain.cancelScheduledValues(ctx.currentTime);
+    musicGain.gain.setTargetAtTime(1,ctx.currentTime,0.15);
+    windGain.gain.cancelScheduledValues(ctx.currentTime);
+    windGain.gain.setTargetAtTime(0,ctx.currentTime,0.2);
+    nextTime=ctx.currentTime+0.06; step=0;
+    timer=setInterval(schedule,25); schedule();
+    setUI(true);
+  }
+  function stopMusic(){
+    if(!ctx || !playing) return;
+    musicGain.gain.cancelScheduledValues(ctx.currentTime);
+    musicGain.gain.setTargetAtTime(0,ctx.currentTime,0.12);
+    windGain.gain.cancelScheduledValues(ctx.currentTime);
+    windGain.gain.setTargetAtTime(0.035,ctx.currentTime,0.5);
+    clearInterval(timer); timer=null;
+    setUI(false);
+  }
+  btn.addEventListener('click',function(){
+    ensureAudio();
+    if(playing){ userMuted=true; stopMusic(); }
+    else { userMuted=false; startMusic(); }
+  });
+
+  /* Ease in the calm wind as soon as the browser allows audio (repeat visits
+     after a click, tab focus, etc.). A deliberate mute is still respected. */
+  function tryAutoStart(){
+    if(userMuted) return;
+    ensureAudio();
+    if(ctx.state==='running'){ startWind(); return; }
+    var p=ctx.resume();
+    if(p && p.then) p.then(function(){
+      if(!userMuted && ctx.state==='running') startWind();
+    }).catch(function(){});
+  }
+  window.addEventListener('load',tryAutoStart);
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) tryAutoStart();
+  });
+
+  /* Any click unlocks audio so hover/step/fire sounds can work afterwards.
+     If that first click wasn't the music button, ease the wind in; a button
+     click starts music itself and must win. */
+  document.addEventListener('click',function(ev){
+    ensureAudio();
+    var onButton=ev.target && ev.target.closest && ev.target.closest('#musicToggle');
+    if(!userMuted && !playing && !onButton) startWind();
+  },{once:true});
+
+  if(window.matchMedia('(hover:hover)').matches){
+    document.querySelectorAll('button, a').forEach(function(el){
+      el.addEventListener('pointerenter',function(ev){
+        if(ev.pointerType && ev.pointerType!=='mouse') return;
+        blip(el.classList.contains('firefly')?990:660);
+      });
+    });
+  }
+
+  /* Footsteps while the hero is walking. */
+  var stepTimer=null;
+  new MutationObserver(function(){
+    if(!ctx) return;
+    var walking=hero.classList.contains('walking');
+    if(walking && !stepTimer){
+      noiseHit(ctx.currentTime,0.055,'lowpass',900,0.018);
+      stepTimer=setInterval(function(){
+        noiseHit(ctx.currentTime,0.055,'lowpass',900,0.018);
+      },260);
+    } else if(!walking && stepTimer){
+      clearInterval(stepTimer); stepTimer=null;
+    }
+  }).observe(hero,{attributes:true,attributeFilter:['class']});
+
+  /* Dangerous little woosh on ignition, then a breathing whoosh with pops. */
+  var crackleTimer=null, wasLit=false;
+  function scheduleCrackle(){
+    if(campfire.dataset.lit!=='true'){ crackleTimer=null; return; }
+    noiseHit(ctx.currentTime,0.02+Math.random()*0.05,'bandpass',1100+Math.random()*1800,0.01+Math.random()*0.014);
+    crackleTimer=setTimeout(scheduleCrackle,90+Math.random()*330);
+  }
+  function fireIgnition(){
+    var t=ctx.currentTime;
+    /* Bright noise burst that sweeps down into a low "wfuuh". */
+    var s=ctx.createBufferSource(), f=ctx.createBiquadFilter(), g=ctx.createGain();
+    s.buffer=noiseBuf; f.type='lowpass';
+    f.frequency.setValueAtTime(6500,t);
+    f.frequency.exponentialRampToValueAtTime(320,t+0.55);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t); s.stop(t+0.62);
+    /* Short low thump underneath. */
+    var o=ctx.createOscillator(), og=ctx.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(130,t);
+    o.frequency.exponentialRampToValueAtTime(42,t+0.28);
+    og.gain.setValueAtTime(0.12,t);
+    og.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+    o.connect(og); og.connect(master);
+    o.start(t); o.stop(t+0.34);
+  }
+  function updateFire(){
+    if(!ctx) return;
+    var lit=campfire.dataset.lit==='true';
+    if(lit && !wasLit) fireIgnition();
+    wasLit=lit;
+    fireGain.gain.cancelScheduledValues(ctx.currentTime);
+    fireGain.gain.setTargetAtTime(lit?0.018:0,ctx.currentTime,lit?0.18:0.3);
+    if(lit && !crackleTimer) scheduleCrackle();
+    else if(!lit && crackleTimer){ clearTimeout(crackleTimer); crackleTimer=null; }
+  }
+  new MutationObserver(updateFire).observe(campfire,{attributes:true,attributeFilter:['data-lit']});
+})();
+</script>
 </body>
 </html>
