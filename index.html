@@ -1095,7 +1095,7 @@
     }
   }
 
-  async function load({ silent = false } = {}) {
+  async function loadREST({ silent = false } = {}) {
     if (el.refresh.disabled) return;
     el.refresh.disabled = true;
     if (!silent && el.status.textContent !== "Connecting to Lanyard…") {
@@ -1120,14 +1120,121 @@
     }
   }
 
-  el.refresh.addEventListener("click", () => load());
-  load();
-  setInterval(() => {
-    if (document.visibilityState === "visible") load({ silent: true });
-  }, 10000);
+  /* The socket pushes presence changes as they happen, so the 10s poll is gone.
+     REST is kept only as a one-off fallback if the socket never delivers data
+     and for the manual Refresh button. */
+  const SOCKET_URL = "wss://api.lanyard.rest/socket";
+  const INITIAL_RECONNECT_DELAY = 1000;
+  const MAX_RECONNECT_DELAY = 30000;
+  let socket = null;
+  let heartbeatTimer = 0;
+  let reconnectTimer = 0;
+  let socketStartupTimer = 0;
+  let reconnectDelay = INITIAL_RECONNECT_DELAY;
+  let hasPresence = false;
+  let restFallbackTried = false;
+
+  function clearHeartbeat() {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = 0;
+  }
+
+  function presenceFromMessage(msg) {
+    if (!msg || msg.op !== 0) return null;
+    if (msg.t === "INIT_STATE") {
+      const d = msg.d || {};
+      if (d[USER_ID]) return d[USER_ID];
+      return d.discord_user && (!d.user_id || d.user_id === USER_ID) ? d : null;
+    }
+    if (msg.t === "PRESENCE_UPDATE") {
+      const d = msg.d || {};
+      return !d.user_id || d.user_id === USER_ID ? d : null;
+    }
+    return null;
+  }
+
+  function ensureRestFallback() {
+    if (hasPresence || restFallbackTried) return;
+    restFallbackTried = true;
+    loadREST({ silent: true });
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    const delay = reconnectDelay;
+    reconnectDelay = Math.min(delay * 2, MAX_RECONNECT_DELAY);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = 0;
+      connectSocket();
+    }, delay);
+    ensureRestFallback();
+  }
+
+  function connectSocket() {
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+    clearHeartbeat();
+    let ws;
+    try {
+      ws = new WebSocket(SOCKET_URL);
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+    socket = ws;
+    clearTimeout(socketStartupTimer);
+    socketStartupTimer = setTimeout(() => {
+      if (!hasPresence) ensureRestFallback();
+    }, REQUEST_TIMEOUT);
+
+    ws.addEventListener("open", () => {
+      reconnectDelay = INITIAL_RECONNECT_DELAY;
+    });
+
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (msg.op === 1) {
+        const interval = Number(msg.d && msg.d.heartbeat_interval);
+        clearHeartbeat();
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: 3 }));
+        }, Number.isFinite(interval) && interval > 0 ? interval : 30000);
+        ws.send(JSON.stringify({ op: 2, d: { subscribe_to_ids: [USER_ID] } }));
+        return;
+      }
+      const presence = presenceFromMessage(msg);
+      if (presence) {
+        hasPresence = true;
+        clearTimeout(socketStartupTimer);
+        render(presence);
+      } else if (msg.op === 0 && msg.t === "INIT_STATE") {
+        ensureRestFallback();
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      if (socket === ws) socket = null;
+      clearTimeout(socketStartupTimer);
+      clearHeartbeat();
+      scheduleReconnect();
+    });
+  }
+
+  el.refresh.addEventListener("click", () => loadREST());
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") load({ silent: true });
+    if (document.visibilityState !== "visible") return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = 0;
+      reconnectDelay = INITIAL_RECONNECT_DELAY;
+      connectSocket();
+    }
   });
+  connectSocket();
 
   const root = document.documentElement;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
