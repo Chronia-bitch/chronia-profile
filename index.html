@@ -434,20 +434,6 @@
       linear-gradient(var(--gold),var(--gold)) 13px 0/10px 10px no-repeat,
       linear-gradient(#8ce99a,#8ce99a) 26px 0/10px 10px no-repeat;
   }
-  /* Quiet timestamp parked in the corner of the scene. Fixed outside the
-     transformed card so it stays pinned to the viewport; 80% transparent. */
-  .updated{
-    position:fixed;
-    left:14px;bottom:10px;
-    z-index:3;
-    pointer-events:none;
-    color:var(--cream);
-    font-family:var(--font-body);
-    font-size:11px;
-    line-height:1;
-    white-space:nowrap;
-    opacity:.2;
-  }
   .counter{
     display:inline-flex;
     align-items:center;
@@ -850,7 +836,6 @@
     <section class="card" aria-labelledby="name">
       <div class="card__top">
         <span class="counter"><span id="fireflyCount">0</span>/6</span>
-        <button id="refresh" type="button">Refresh</button>
       </div>
 
       <div class="identity">
@@ -889,8 +874,6 @@
     <div class="foot" aria-hidden="true"></div>
   </main>
 
-  <span id="updated" class="updated">ID 987815885702041610</span>
-
 <script>
   const USER_ID = "987815885702041610";
   const ENDPOINT = `https://api.lanyard.rest/v1/users/${USER_ID}`;
@@ -906,8 +889,6 @@
     activityName: document.getElementById("activityName"),
     activityDetail: document.getElementById("activityDetail"),
     error: document.getElementById("error"),
-    refresh: document.getElementById("refresh"),
-    updated: document.getElementById("updated"),
   };
 
   const STATUS_LABELS = {
@@ -1047,8 +1028,6 @@
       greeted = true;
       say("Hey, traveler!");
     }
-
-    el.updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
   function showError(message) {
@@ -1059,7 +1038,6 @@
     el.activity.hidden = true;
     el.ring.dataset.status = "offline";
     if (el.status.textContent !== "Unavailable") el.status.textContent = "Unavailable";
-    el.updated.textContent = "Connection failed";
 
     const text = `Couldn't load presence: ${message}. Check your connection and try again.`;
     if (!errorShowing) {
@@ -1080,6 +1058,7 @@
 
   const REQUEST_TIMEOUT = 12000;
   const RETRY_DELAY = 400;
+  let restLoading = false;
 
   async function fetchPresence() {
     const controller = new AbortController();
@@ -1096,8 +1075,8 @@
   }
 
   async function loadREST({ silent = false } = {}) {
-    if (el.refresh.disabled) return;
-    el.refresh.disabled = true;
+    if (restLoading) return;
+    restLoading = true;
     if (!silent && el.status.textContent !== "Connecting to Lanyard…") {
       el.status.textContent = "Connecting to Lanyard…";
     }
@@ -1116,13 +1095,12 @@
     } catch (err) {
       showError(err.name === "AbortError" ? "request timed out" : (err.message || "network error"));
     } finally {
-      el.refresh.disabled = false;
+      restLoading = false;
     }
   }
 
   /* The socket pushes presence changes as they happen, so the 10s poll is gone.
-     REST is kept only as a one-off fallback if the socket never delivers data
-     and for the manual Refresh button. */
+     REST is kept only as a one-off fallback if the socket never delivers data. */
   const SOCKET_URL = "wss://api.lanyard.rest/socket";
   const INITIAL_RECONNECT_DELAY = 1000;
   const MAX_RECONNECT_DELAY = 30000;
@@ -1224,7 +1202,6 @@
     });
   }
 
-  el.refresh.addEventListener("click", () => loadREST());
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
