@@ -1276,10 +1276,111 @@
     night: "#0d1b2a",
   };
 
-  function SCENE_FOR_HOUR(hour) {
-    if (hour >= 5 && hour <= 7) return "morning";
-    if (hour >= 8 && hour <= 17) return "day";
+  const CELESTIAL_KEYS = [
+    { h: 0,  sunX: 8,  sunY: 38, sunO: 0,    moonX: 50, moonY: 12, moonO: 1,    night: 1,    stars: 0.85 },
+    { h: 3,  sunX: 8,  sunY: 38, sunO: 0,    moonX: 72, moonY: 22, moonO: 1,    night: 1,    stars: 0.85 },
+    { h: 5,  sunX: 8,  sunY: 38, sunO: 0,    moonX: 82, moonY: 30, moonO: 1,    night: 1,    stars: 0.85 },
+    { h: 6,  sunX: 8,  sunY: 38, sunO: 0.25, moonX: 92, moonY: 38, moonO: 0.65, night: 0.75, stars: 0.55 },
+    { h: 7,  sunX: 20, sunY: 30, sunO: 1,    moonX: 92, moonY: 38, moonO: 0,    night: 0.25, stars: 0.15 },
+    { h: 8,  sunX: 28, sunY: 22, sunO: 1,    moonX: 92, moonY: 38, moonO: 0,    night: 0,    stars: 0 },
+    { h: 13, sunX: 50, sunY: 8,  sunO: 1,    moonX: 92, moonY: 38, moonO: 0,    night: 0,    stars: 0 },
+    { h: 18, sunX: 72, sunY: 22, sunO: 1,    moonX: 8,  moonY: 38, moonO: 0,    night: 0,    stars: 0 },
+    { h: 19, sunX: 82, sunY: 30, sunO: 0.65, moonX: 8,  moonY: 38, moonO: 0.35, night: 0.4,  stars: 0.25 },
+    { h: 20, sunX: 92, sunY: 38, sunO: 0,    moonX: 8,  moonY: 38, moonO: 1,    night: 0.8,  stars: 0.6 },
+    { h: 21, sunX: 92, sunY: 38, sunO: 0,    moonX: 20, moonY: 30, moonO: 1,    night: 1,    stars: 0.85 },
+    { h: 24, sunX: 8,  sunY: 38, sunO: 0,    moonX: 50, moonY: 12, moonO: 1,    night: 1,    stars: 0.85 },
+  ];
+
+  const PALETTES = {
+    NIGHT:   { sky1:"#0d1b2a", sky2:"#1b3a4b", hill:"#1d3a4a", hill2:"#173443", treeFar:"#123528", treeNear:"#0a1f18", ground:"#123a2a", grass:"#123528", grassDeep:"#0a1f18", panel:"#122d24", panel2:"#17382d", ink3:"#8fb7a5" },
+    PREDAWN: { sky1:"#243a52", sky2:"#4b5f6a", hill:"#2b4a54", hill2:"#223f4a", treeFar:"#173528", treeNear:"#0d241c", ground:"#1c3b2c", grass:"#173528", grassDeep:"#0d241c", panel:"#163028", panel2:"#1d3f33", ink3:"#a9c3b4" },
+    MORNING: { sky1:"#f9a03f", sky2:"#ffe0a3", hill:"#8fae6b", hill2:"#6f9a5a", treeFar:"#3f6b45", treeNear:"#21402c", ground:"#5e8a4f", grass:"#3f6b45", grassDeep:"#21402c", panel:"#2b3a26", panel2:"#3a4d31", ink3:"#ffe0ac" },
+    DAY:     { sky1:"#8fd3e8", sky2:"#d9f2d0", hill:"#74c69d", hill2:"#52b788", treeFar:"#2d6a4f", treeNear:"#1b4332", ground:"#40916c", grass:"#2d6a4f", grassDeep:"#1b4332", panel:"#1d3b2f", panel2:"#27503d", ink3:"#a9d3bd" },
+    DUSK:    { sky1:"#f4a261", sky2:"#ffd9a0", hill:"#8a9f68", hill2:"#6c8b58", treeFar:"#3a6442", treeNear:"#203c2a", ground:"#5a824c", grass:"#3a6442", grassDeep:"#203c2a", panel:"#2a3926", panel2:"#394b31", ink3:"#ffe0ac" },
+  };
+  const COLOR_STOPS = [
+    { h: 0,    palette: PALETTES.NIGHT },
+    { h: 5,    palette: PALETTES.PREDAWN },
+    { h: 6.5,  palette: PALETTES.MORNING },
+    { h: 8,    palette: PALETTES.DAY },
+    { h: 17,   palette: PALETTES.DAY },
+    { h: 18.5, palette: PALETTES.DUSK },
+    { h: 20,   palette: PALETTES.NIGHT },
+    { h: 24,   palette: PALETTES.NIGHT },
+  ];
+
+  function clampHour(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    return ((number % 24) + 24) % 24;
+  }
+
+  function labelForHour(hour) {
+    if (hour >= 5 && hour < 8) return "morning";
+    if (hour >= 8 && hour < 18) return "day";
     return "night";
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function hexToRgb(hex) {
+    const value = hex.replace("#", "");
+    return [
+      parseInt(value.slice(0, 2), 16),
+      parseInt(value.slice(2, 4), 16),
+      parseInt(value.slice(4, 6), 16),
+    ];
+  }
+
+  function lerpColor(a, b, t) {
+    const from = hexToRgb(a);
+    const to = hexToRgb(b);
+    return `rgb(${Math.round(lerp(from[0], to[0], t))}, ${Math.round(lerp(from[1], to[1], t))}, ${Math.round(lerp(from[2], to[2], t))})`;
+  }
+
+  function bracket(stops, hour) {
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (hour >= stops[i].h && hour <= stops[i + 1].h) {
+        const span = stops[i + 1].h - stops[i].h;
+        return [stops[i], stops[i + 1], span > 0 ? (hour - stops[i].h) / span : 0];
+      }
+    }
+    return [stops[stops.length - 1], stops[stops.length - 1], 0];
+  }
+
+  function timeStateAt(value) {
+    const hour = clampHour(value);
+    const [cFrom, cTo, ct] = bracket(CELESTIAL_KEYS, hour);
+    const [pFrom, pTo, pt] = bracket(COLOR_STOPS, hour);
+    const vars = {};
+    Object.keys(pFrom.palette).forEach((key) => {
+      const cssName = key
+        .replace(/([A-Z])/g, "-$1")
+        .replace(/([a-z])(\d)/g, "$1-$2")
+        .toLowerCase();
+      vars[`--${cssName}`] = lerpColor(pFrom.palette[key], pTo.palette[key], pt);
+    });
+    vars["--night-opacity"] = String(lerp(cFrom.night, cTo.night, ct));
+    vars["--star-opacity"] = String(lerp(cFrom.stars, cTo.stars, ct));
+    vars["--sun-x"] = `${lerp(cFrom.sunX, cTo.sunX, ct)}%`;
+    vars["--sun-y"] = `${lerp(cFrom.sunY, cTo.sunY, ct)}%`;
+    vars["--sun-opacity"] = String(lerp(cFrom.sunO, cTo.sunO, ct));
+    vars["--moon-x"] = `${lerp(cFrom.moonX, cTo.moonX, ct)}%`;
+    vars["--moon-y"] = `${lerp(cFrom.moonY, cTo.moonY, ct)}%`;
+    vars["--moon-opacity"] = String(lerp(cFrom.moonO, cTo.moonO, ct));
+    return { fractionalHour: hour, label: labelForHour(hour), vars };
+  }
+
+  function timeState(now) {
+    const date = now instanceof Date ? now : new Date(now);
+    const hour = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600 + date.getMilliseconds() / 3600000;
+    return timeStateAt(hour);
+  }
+
+  function SCENE_FOR_HOUR(hour) {
+    return labelForHour(Number(hour));
   }
 
   const themeMeta = document.querySelector('meta[name="theme-color"]');
@@ -1329,6 +1430,7 @@
   window.SCENE_FOR_HOUR = SCENE_FOR_HOUR;
   window.setScene = setScene;
   window.syncSceneFromClock = syncSceneFromClock;
+  window.ChroniaTime = { stateAt: timeStateAt, state: timeState };
 
   setScene(SCENE_FOR_HOUR(new Date().getHours()));
   setInterval(() => syncSceneFromClock(), 60000);
