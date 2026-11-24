@@ -1643,7 +1643,7 @@
     const target = event.target;
     if (!(target instanceof Element)) return;
     /* Never swallow clicks meant for the card, portals, fireflies or controls. */
-    if (target.closest(".campfire, .fireflies, .firefly, .shell, a, button")) return;
+    if (target.closest(".campfire, .fireflies, .firefly, .shell, a, button, .debug-menu, input, select, textarea, label")) return;
     moveHeroTo(
       (event.clientX / window.innerWidth) * 100,
       (event.clientY / window.innerHeight) * 100,
@@ -1711,10 +1711,10 @@
   @keyframes hintPulse{50%{border-color:var(--ink-3)}}
   @media (prefers-reduced-motion:reduce){.audio-hint{animation:none}}
 
-  /* Hidden scene-switcher opened by typing "chronia". */
+  /* Hidden time slider opened by typing "chronia". */
   .debug-menu{
     position:fixed;top:58px;left:12px;z-index:81;
-    width:132px;padding:10px;
+    width:220px;padding:10px;
     background:var(--panel);color:var(--cream);
     border:2px solid var(--gold);
     box-shadow:0 0 0 3px var(--wood-dark),5px 5px 0 rgba(0,0,0,.35);
@@ -1724,18 +1724,28 @@
     margin:0 0 8px;font-size:10px;letter-spacing:1px;
     color:var(--gold);text-align:center;
   }
-  .debug-menu button{
-    display:block;width:100%;margin:0 0 6px;padding:6px 4px;
+  .debug-menu label{
+    display:block;margin:0 0 6px;
+    font-size:9px;letter-spacing:1px;color:var(--ink-3);
+  }
+  .debug-slider{
+    display:block;width:100%;height:18px;margin:0 0 8px;padding:0;
+    border:0;border-radius:0;background:var(--panel-2);
+    accent-color:var(--gold);cursor:pointer;
+  }
+  .debug-slider:focus-visible{outline:2px solid var(--cream);outline-offset:3px}
+  .debug-menu output{
+    display:block;margin:0 0 8px;
+    font:14px/1 var(--font-body);color:var(--gold);text-align:center;
+  }
+  .debug-menu__live{
+    display:block;width:100%;margin:0;padding:6px 4px;
     border:0;border-radius:0;
     background:var(--panel-2);color:var(--cream);
     font:12px/1 var(--font-body);cursor:pointer;
   }
-  .debug-menu button:hover,
-  .debug-menu button[data-active="true"]{background:var(--gold);color:var(--panel)}
-  .debug-menu button:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
-  .debug-menu__note{
-    margin:2px 0 0;font-size:9px;color:var(--ink-3);text-align:center;
-  }
+  .debug-menu__live:hover{background:var(--gold);color:var(--panel)}
+  .debug-menu__live:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
 
   /* This third log looked like a stray dark bar; hide it entirely. */
   .campfire__logs i:nth-child(3){background:transparent!important;box-shadow:none!important}
@@ -1787,18 +1797,21 @@
 </style>
 <button class="music-toggle" id="musicToggle" type="button" aria-label="Play music" aria-pressed="false" data-playing="false" title="Play music"><span aria-hidden="true">♪</span></button>
 <span class="audio-hint" id="audioHint" aria-hidden="true">click for ambience</span>
-<div class="debug-menu" id="debugMenu" role="dialog" aria-label="Scene preview menu" hidden>
+<div class="debug-menu" id="debugMenu" role="dialog" aria-label="Time preview" hidden>
   <p class="debug-menu__title">TIME OF DAY</p>
-  <button type="button" data-scene="morning">Morning</button>
-  <button type="button" data-scene="day">Day</button>
-  <button type="button" data-scene="night">Night</button>
-  <p class="debug-menu__note">preview only</p>
+  <label for="sceneTime">TIME</label>
+  <input id="sceneTime" class="debug-slider" type="range" min="0" max="1439" step="1" aria-label="Preview time of day">
+  <output id="sceneTimeReadout" for="sceneTime" aria-live="polite">--:--</output>
+  <button type="button" id="sceneTimeLive" class="debug-menu__live">Back to live</button>
 </div>
 <script>
 (function(){
   var btn=document.getElementById('musicToggle');
   var hint=document.getElementById('audioHint');
   var debugMenu=document.getElementById('debugMenu');
+  var sceneRange=document.getElementById('sceneTime');
+  var sceneReadout=document.getElementById('sceneTimeReadout');
+  var sceneLive=document.getElementById('sceneTimeLive');
   var world=document.querySelector('.world');
   var hero=document.getElementById('hero');
   var campfire=document.getElementById('campfire');
@@ -2069,52 +2082,63 @@
   }
   new MutationObserver(updateFire).observe(campfire,{attributes:true,attributeFilter:['data-lit']});
 
-  /* Hidden scene preview: type "chronia" anywhere outside a text field. */
+  /* Hidden time preview: type "chronia" anywhere outside a text field. */
   var typed='';
-  function markActiveScene(){
-    var current=document.body.dataset.scene;
-    debugMenu.querySelectorAll('button[data-scene]').forEach(function(b){
-      b.dataset.active=String(b.dataset.scene===current);
-    });
+  var liveMinutesAtOpen=0;
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function clockMinutes(){
+    var now=new Date();
+    return now.getHours()*60+now.getMinutes();
   }
-  function openDebug(){
+  function updateReadout(value){
+    var minutes=Math.max(0,Math.min(1439,Math.round(Number(value)||0)));
+    sceneReadout.textContent=pad2(Math.floor(minutes/60))+':'+pad2(minutes%60);
+    return minutes;
+  }
+  function openPreview(){
+    liveMinutesAtOpen=clockMinutes();
+    sceneRange.value=String(liveMinutesAtOpen);
+    updateReadout(liveMinutesAtOpen);
     debugMenu.hidden=false;
-    markActiveScene();
-    var first=debugMenu.querySelector('button[data-scene]');
-    if(first) first.focus();
+    sceneRange.focus();
   }
-  function closeDebug(){
+  function closePreview(){
+    if(debugMenu.hidden){ typed=''; return; }
+    sceneRange.value=String(liveMinutesAtOpen);
+    updateReadout(liveMinutesAtOpen);
     debugMenu.hidden=true;
+    if(window.ChroniaTime && typeof window.ChroniaTime.resume==='function') window.ChroniaTime.resume();
     typed='';
   }
+  function applyRange(){
+    var minutes=updateReadout(sceneRange.value);
+    if(window.ChroniaTime && typeof window.ChroniaTime.preview==='function') window.ChroniaTime.preview(minutes/60);
+  }
+  sceneRange.addEventListener('input',applyRange);
+  sceneLive.addEventListener('click',closePreview);
   document.addEventListener('keydown',function(ev){
     if(ev.ctrlKey||ev.altKey||ev.metaKey) return;
-    var t=ev.target;
-    if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
     if(ev.key==='Escape'){
-      if(!debugMenu.hidden){ closeDebug(); ev.preventDefault(); }
+      if(!debugMenu.hidden){ closePreview(); ev.preventDefault(); }
       typed='';
       return;
     }
+    var t=ev.target;
+    if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
     if(/^[a-z]$/i.test(ev.key)){
       typed=(typed+ev.key.toLowerCase()).slice(-7);
       if(typed==='chronia'){
         typed='';
-        if(debugMenu.hidden) openDebug(); else closeDebug();
+        if(debugMenu.hidden) openPreview(); else closePreview();
       }
     } else {
       typed='';
     }
   });
-  debugMenu.addEventListener('click',function(ev){
-    var b=ev.target.closest('button[data-scene]');
-    if(!b) return;
-    if(typeof window.setScene==='function') window.setScene(b.dataset.scene,{animate:true});
-    closeDebug();
-  });
   document.addEventListener('pointerdown',function(ev){
-    if(!debugMenu.hidden && !debugMenu.contains(ev.target)) closeDebug();
+    if(!debugMenu.hidden && !debugMenu.contains(ev.target)) closePreview();
   });
+  window.__chroniaSlider={panel:debugMenu,range:sceneRange,readout:sceneReadout,open:openPreview,close:closePreview};
 })();
 </script>
 
