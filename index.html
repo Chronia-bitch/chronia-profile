@@ -40,54 +40,7 @@
     --py:0;
   }
 
-  /* ---------- scene palettes ---------- */
-  body[data-scene="day"]{
-    --sky-1:#8fd3e8;
-    --sky-2:#d9f2d0;
-    --hill:#74c69d;
-    --hill-2:#52b788;
-    --tree-far:#2d6a4f;
-    --tree-near:#1b4332;
-    --ground:#40916c;
-    --grass:#2d6a4f;
-    --grass-deep:#1b4332;
-    --panel:#1d3b2f;
-    --panel-2:#27503d;
-    --ink-3:#a9d3bd;
-    --firefly:#fff3a0;
-  }
-
-  body[data-scene="morning"]{
-    --sky-1:#f9a03f;
-    --sky-2:#ffe0a3;
-    --hill:#8fae6b;
-    --hill-2:#6f9a5a;
-    --tree-far:#3f6b45;
-    --tree-near:#21402c;
-    --ground:#5e8a4f;
-    --grass:#3f6b45;
-    --grass-deep:#21402c;
-    --panel:#2b3a26;
-    --panel-2:#3a4d31;
-    --ink-3:#ffe0ac;
-    --firefly:#fff2ae;
-  }
-
-  body[data-scene="night"]{
-    --sky-1:#0d1b2a;
-    --sky-2:#1b3a4b;
-    --hill:#1d3a4a;
-    --hill-2:#173443;
-    --tree-far:#123528;
-    --tree-near:#0a1f18;
-    --ground:#123a2a;
-    --grass:#123528;
-    --grass-deep:#0a1f18;
-    --panel:#122d24;
-    --panel-2:#17382d;
-    --ink-3:#8fb7a5;
-    --firefly:#fff9b0;
-  }
+  /* Scene palettes are written continuously as inline variables on body. */
 
   *,*::before,*::after{box-sizing:border-box}
   html,body{min-height:100%}
@@ -117,13 +70,11 @@
   }
   .sky{position:absolute;inset:0}
   .sky--day{background:linear-gradient(180deg,var(--sky-1) 0%,var(--sky-2) 72%)}
-  .sky--night{background:linear-gradient(180deg,#0d1b2a,#1b3a4b);opacity:0;transition:opacity .5s steps(5,end)}
-  body[data-scene="night"] .sky--night{opacity:1}
+  .sky--night{background:linear-gradient(180deg,var(--sky-1) 0%,var(--sky-2) 72%);opacity:var(--night-opacity,0)}
 
   .starfield{
     position:absolute;inset:0 0 46%;
-    opacity:0;
-    transition:opacity .5s steps(5,end);
+    opacity:var(--star-opacity,0);
     background-image:
       radial-gradient(2px 2px at 24px 34px,#fff8e7 99%,transparent),
       radial-gradient(2px 2px at 138px 88px,#fff8e7 99%,transparent),
@@ -131,30 +82,25 @@
       radial-gradient(2px 2px at 186px 24px,#fff8e7 99%,transparent);
     background-size:220px 170px;
   }
-  body[data-scene="night"] .starfield{opacity:.85}
 
   .sun,.moon{
-    position:absolute;top:10%;left:79%;
+    position:absolute;
     width:60px;height:60px;
-    transition:opacity .45s steps(4,end),top .6s steps(6,end),background .3s steps(3,end);
   }
-  .sun{background:var(--gold);box-shadow:0 0 0 8px rgba(255,209,102,.16),0 0 48px rgba(255,209,102,.55)}
-  .moon{background:#f2f6d9;box-shadow:0 0 0 8px rgba(242,246,217,.12),0 0 44px rgba(242,246,217,.45);opacity:0}
-
-  /* Morning sun rises low and warm above the orange sky. */
-  body[data-scene="morning"] .sun{
-    top:36%;
-    background:#ff9f45;
-    box-shadow:0 0 0 8px rgba(255,159,69,.18),0 0 52px rgba(255,159,69,.6);
+  .sun{
+    left:var(--sun-x,8%);
+    top:var(--sun-y,10%);
+    opacity:var(--sun-opacity,0);
+    background:var(--gold);
+    box-shadow:0 0 0 8px rgba(255,209,102,.16),0 0 48px rgba(255,209,102,.55);
   }
-  body[data-scene="night"] .sun{opacity:0}
-  body[data-scene="night"] .moon{opacity:1}
-
-  /* One-shot clock flip: stepped sun/moon arc plus a stepped sky crossfade. */
-  body.scene-changing .sky--night,
-  body.scene-changing .starfield{transition:opacity .6s steps(6,end)}
-  body.scene-changing .sun,
-  body.scene-changing .moon{animation:sceneArc .6s steps(6,end) 1}
+  .moon{
+    left:var(--moon-x,79%);
+    top:var(--moon-y,10%);
+    opacity:var(--moon-opacity,0);
+    background:#f2f6d9;
+    box-shadow:0 0 0 8px rgba(242,246,217,.12),0 0 44px rgba(242,246,217,.45);
+  }
 
   .layer{position:absolute;pointer-events:none;transition:transform .3s steps(5,end)}
   /* Hill bodies reach the viewport floor; only the jagged tops are clipped, so parallax
@@ -720,12 +666,6 @@
     from{transform:translateX(-50%) scale(.94,.86)}
     to{transform:translateX(-50%) scale(1.02,1.08)}
   }
-  @keyframes sceneArc{
-    0%{transform:translate(0,0)}
-    50%{transform:translate(-20px,-30px)}
-    100%{transform:translate(-40px,0)}
-  }
-
   /* If animations are throttled, settle everything into its final visible state. */
   body.settled .shell,
   body.settled .wordmark,
@@ -1389,51 +1329,146 @@
     return motionQuery.matches || matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  let sceneChangeTimer = 0;
+  let displayedVars = null;
+  let tweenFrame = 0;
+  let tweenFallback = 0;
+  let previewHour = null;
 
-  function clearSceneChanging() {
-    document.body.classList.remove("scene-changing");
-    document.body.removeEventListener("animationend", onSceneAnimationEnd);
-    clearTimeout(sceneChangeTimer);
-    sceneChangeTimer = 0;
+  function cancelTween() {
+    if (tweenFrame) cancelAnimationFrame(tweenFrame);
+    if (tweenFallback) clearTimeout(tweenFallback);
+    tweenFrame = 0;
+    tweenFallback = 0;
   }
 
-  function onSceneAnimationEnd(event) {
-    if (event.animationName === "sceneArc") clearSceneChanging();
+  function scheduleTween(step) {
+    tweenFrame = requestAnimationFrame((now) => {
+      cancelTween();
+      step(now);
+    });
+    tweenFallback = setTimeout(() => {
+      cancelTween();
+      step(performance.now());
+    }, 32);
   }
 
-  function setScene(scene, { animate = false } = {}) {
+  function writeVars(vars) {
     const body = document.body;
-    const next = SCENE_LABELS[scene] ? scene : "day";
+    Object.keys(vars).forEach((key) => body.style.setProperty(key, vars[key]));
+    displayedVars = Object.assign({}, vars);
+  }
 
-    body.dataset.scene = next;
-    syncFireflyAvailability(next);
-    if (themeMeta) themeMeta.setAttribute("content", SCENE_THEME[next]);
-
-    clearSceneChanging();
-    if (animate && !sceneReducedMotion()) {
-      void body.offsetWidth;
-      body.classList.add("scene-changing");
-      body.addEventListener("animationend", onSceneAnimationEnd);
-      sceneChangeTimer = setTimeout(clearSceneChanging, 800);
+  function lerpVarValue(from, to, t) {
+    if (typeof from === "string" && typeof to === "string" && from.endsWith("%") && to.endsWith("%")) {
+      return `${lerp(parseFloat(from), parseFloat(to), t)}%`;
     }
-    return next;
+    if (
+      typeof from === "string" &&
+      typeof to === "string" &&
+      from.startsWith("rgb(") &&
+      to.startsWith("rgb(")
+    ) {
+      const a = from.match(/-?\d+(?:\.\d+)?/g).map(Number);
+      const b = to.match(/-?\d+(?:\.\d+)?/g).map(Number);
+      return `rgb(${Math.round(lerp(a[0], b[0], t))}, ${Math.round(lerp(a[1], b[1], t))}, ${Math.round(lerp(a[2], b[2], t))})`;
+    }
+    const a = Number(from);
+    const b = Number(to);
+    if (Number.isFinite(a) && Number.isFinite(b)) return String(lerp(a, b, t));
+    return to;
   }
 
-  function syncSceneFromClock({ animate = true } = {}) {
-    const next = SCENE_FOR_HOUR(new Date().getHours());
-    const changed = document.body.dataset.scene !== next;
-    setScene(next, { animate: animate && changed });
-    return next;
+  function applyTimeState(state, { durationMs = null } = {}) {
+    cancelTween();
+
+    const body = document.body;
+    body.dataset.scene = state.label;
+    syncFireflyAvailability(state.label);
+    if (themeMeta) themeMeta.setAttribute("content", SCENE_THEME[state.label]);
+
+    const explicit = durationMs !== null && durationMs !== undefined;
+    const effective = explicit
+      ? Number(durationMs)
+      : location.search.indexOf("instant") >= 0
+        ? 0
+        : 60000;
+
+    if (!Number.isFinite(effective) || effective <= 0 || sceneReducedMotion()) {
+      writeVars(state.vars);
+      return state.label;
+    }
+
+    const fromVars = displayedVars ? Object.assign({}, displayedVars) : timeState(new Date()).vars;
+    const started = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - started) / effective);
+      const vars = {};
+      Object.keys(state.vars).forEach((key) => {
+        vars[key] = lerpVarValue(fromVars[key], state.vars[key], t);
+      });
+      writeVars(vars);
+      if (t < 1) {
+        scheduleTween(step);
+      } else {
+        cancelTween();
+        writeVars(state.vars);
+      }
+    };
+    scheduleTween(step);
+    return state.label;
   }
+
+  function isAnimating() {
+    return tweenFrame !== 0 || tweenFallback !== 0;
+  }
+
+  function setScene(scene) {
+    const next = SCENE_LABELS[scene] ? scene : "day";
+    const hour = next === "day" ? 12 : next === "morning" ? 6 : 0;
+    return applyTimeState(timeStateAt(hour), { durationMs: 0 });
+  }
+
+  function syncSceneFromClock() {
+    return applyTimeState(timeState(new Date()));
+  }
+
+  function setPreviewTime(hour) {
+    previewHour = clampHour(hour);
+    document.body.dataset.preview = "true";
+    applyTimeState(timeStateAt(previewHour), { durationMs: 600 });
+  }
+
+  function resumeLiveTime() {
+    previewHour = null;
+    delete document.body.dataset.preview;
+    applyTimeState(timeState(new Date()));
+  }
+
+  function syncLiveCycle() {
+    if (previewHour !== null) return;
+    applyTimeState(timeState(new Date()));
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncLiveCycle();
+  });
 
   window.SCENE_FOR_HOUR = SCENE_FOR_HOUR;
   window.setScene = setScene;
   window.syncSceneFromClock = syncSceneFromClock;
-  window.ChroniaTime = { stateAt: timeStateAt, state: timeState };
+  window.ChroniaTime = {
+    stateAt: timeStateAt,
+    state: timeState,
+    apply: applyTimeState,
+    preview: setPreviewTime,
+    resume: resumeLiveTime,
+    tick: syncLiveCycle,
+    isPreviewing: () => previewHour !== null,
+    isAnimating,
+  };
 
-  setScene(SCENE_FOR_HOUR(new Date().getHours()));
-  setInterval(() => syncSceneFromClock(), 60000);
+  applyTimeState(timeState(new Date()), { durationMs: 0 });
+  setInterval(syncLiveCycle, 60000);
 
   /* ---------- kingdom interactions ---------- */
   const fireflies = [...document.querySelectorAll(".firefly")];
